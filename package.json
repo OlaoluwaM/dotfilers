@@ -1,0 +1,49 @@
+{
+  "name": "dotfilers",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint src/**/*.ts",
+    "lint:test": "eslint tests/**/*.ts",
+    "invoke": "node --experimental-specifier-resolution=node --loader ts-node/esm src/index.ts",
+    "invoke:file": "node --experimental-specifier-resolution=node --loader ts-node/esm --",
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p ./tsconfig.prod.json",
+    "postbuild": "ts-import-patch ./dist && chmod +x ./dist/index.js",
+    "test:setup": "./setup-test-data/setup.sh",
+    "test": "npm run test:setup && NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:ci": "npm run test:setup && NODE_OPTIONS=--experimental-vm-modules CI=true jest",
+    "test:coverage": "npm run test -- --coverage",
+    "test:silent": "npm run test:setup && NODE_OPTIONS=--experimental-vm-modules jest --silent",
+    "test:single": "npm run test:setup && NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern --",
+    "test:single:silent": "npm run test:setup && NODE_OPTIONS=--experimental-vm-modules jest --silent --testPathPattern --"
+  },
+  "keywords": [],
+  "author": "Olaoluwa Mustapha <olaolum@pm.me> (https://www.github.com/OlaoluwaM)",
+  "license": "ISC",
+  "devDependencies": {
+    "@commitlint/cli": "^17.0.1",
+    "@commitlint/config-conventional": "^17.0.0",
+    "@types/eslint-config-prettier": "^6.11.0",
+    "@types/jest": "^27.5.1",
+    "@types/node": "^17.0.35",
+    "@typescript-eslint/eslint-plugin": "^5.26.0",
+    "@typescript-eslint/parser": "^5.26.0",
+    "eslint": "^8.16.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-import-resolver-typescript": "^2.7.1",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-jest": "^26.2.2",
+    "jest": "^28.1.0",
+    "prettier": "^2.6.2",
+    "ts-jest": "^28.0.3",
+    "typescript": "^4.7.2"
+  },
+  "dependencies": {
+    "prompts": "^2.4.2",
+    "zx": "^6.1.0"
+  }
+}
