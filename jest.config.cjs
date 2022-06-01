@@ -9,9 +9,7 @@ const collectCoverageFrom = areWeTestingLibs
   ? ['src/lib/**']
   : ['src/*/{*.ts,!(lib)/**/*.ts}'];
 
-const testPathIgnorePatterns = areWeTestingLibs
-  ? ['tests/**/*.ts']
-  : ['src/lib/**/test.ts'];
+const testPathIgnorePatterns = areWeTestingLibs ? ['/tests/'] : ['src/lib/'];
 
 if (isCI) {
   collectCoverageFrom = undefined;
