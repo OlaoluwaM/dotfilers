@@ -1,7 +1,8 @@
 /** @type {import('ts-jest/dist/types').InitialOptionsTsJest} */
+
 module.exports = {
   preset: 'ts-jest/presets/default-esm',
-  testTimeout: 10000,
+  // testTimeout: 10000,
   testEnvironment: 'node',
   verbose: true,
   testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)'],
@@ -10,7 +11,7 @@ module.exports = {
     '<rootDir>/src/lib/schema-validator-oop.ts',
     '<rootDir>/src/lib/schema-validator-oop/',
   ],
-  setupFilesAfterEnv: ['<rootDir>/tests/test-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   transform: {},
   extensionsToTreatAsEsm: ['.ts'],
   globals: {
@@ -25,4 +26,5 @@ module.exports = {
     '#supports-color':
       '<rootDir>/node_modules/zx/node_modules/chalk/source/vendor/supports-color/index.js',
   },
+  watchman: false,
 };
