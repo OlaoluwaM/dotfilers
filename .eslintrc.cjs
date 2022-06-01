@@ -68,5 +68,11 @@ module.exports = {
     'class-methods-use-this': 'off',
 
     'consistent-return': 'warn',
+    'no-param-reassign': ['error', { props: false }],
+
+    'import/no-extraneous-dependencies': [
+      'error',
+      { devDependencies: ['test/**/*.test.ts', 'src/lib/**/test.ts', 'jest.config.ts'] },
+    ],
   },
 };
