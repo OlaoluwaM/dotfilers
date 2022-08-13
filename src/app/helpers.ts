@@ -1,11 +1,12 @@
+import * as S from 'fp-ts/lib/string';
+
 import { pipe } from 'fp-ts/lib/function';
 import { Reader } from 'fp-ts/Reader';
 import { homedir } from 'os';
 import { compose, replace } from 'ramda';
 import { elem, map, reduce } from 'fp-ts/lib/Array';
-import { Eq, includes, slice } from 'fp-ts/lib/string';
-import { deleteAt, map as recordMap, toArray } from 'fp-ts/lib/Record';
 import { fromNullable, Option, getOrElse } from 'fp-ts/lib/Option';
+import { deleteAt, map as recordMap, toArray } from 'fp-ts/lib/Record';
 import { ConfigGroup, DestinationRecord, File, FileRecord, Files, RawFile } from '@types';
 import {
   newError,
@@ -17,8 +18,8 @@ import {
   NOT_FOUND,
   EXCLUDE_KEY,
   ALL_FILES_CHAR,
-  CURLY_BRACKET_REGEX,
   SHELL_ENV_VAR_REGEX,
+  CURLY_BRACKET_REGEX,
   CONFIG_GRP_DEST_MAP_FILE_NAME,
 } from '../constants';
 
@@ -27,48 +28,49 @@ interface ShellVariableMap {
 }
 
 export function expandShellVariablesInString(strWithShellVars: string) {
-  return expandTokensInString(process.env)(strWithShellVars);
+  return replaceShellVarsInString(process.env)(strWithShellVars);
 }
 
-export function expandTokensInString(shellVariableValueMap: ShellVariableMap) {
-  return replace(SHELL_ENV_VAR_REGEX, (substringMatch: string) =>
-    pipe(
-      shellVariableValueMap,
-      resolveShellVariable(substringMatch),
-      getOrElse(() => NOT_FOUND)
-    )
+export function replaceShellVarsInString(shellVariableValueMap: ShellVariableMap) {
+  return replace(
+    SHELL_ENV_VAR_REGEX,
+    performSubstitutionOnShellVariables(shellVariableValueMap)
   );
 }
-
+function performSubstitutionOnShellVariables(shellVariableValueMap: ShellVariableMap) {
+  return (shellVarStr: string) =>
+    pipe(
+      shellVariableValueMap,
+      resolveShellVariable(shellVarStr),
+      getOrElse(() => NOT_FOUND)
+    );
+}
 function resolveShellVariable(stringifiedShellVar: string) {
   return compose(
-    resolveShellVariablesToTheirValues,
+    determineShellVariableValues,
     resolveTildeAliasIfNeeded
   )(stringifiedShellVar);
 }
-
 function resolveTildeAliasIfNeeded(possibleTildeAlias: string) {
   if (possibleTildeAlias === '~') return '$HOME';
   return possibleTildeAlias;
 }
-
-function resolveShellVariablesToTheirValues(strWithShellVars: string) {
+function determineShellVariableValues(strWithShellVars: string) {
   return pipe(
     strWithShellVars,
-    slice(1, Infinity),
+    S.slice(1, Infinity),
     replace(CURLY_BRACKET_REGEX, ''),
-    matchPotentialShellVariablesWithPaths
+    lookupShellVariableValues
   );
 }
-
-function matchPotentialShellVariablesWithPaths(
+function lookupShellVariableValues(
   potentialShellVariable: string
 ): Reader<ShellVariableMap, Option<string>> {
   return shellVariableValueMap =>
     fromNullable(shellVariableValueMap[potentialShellVariable]);
 }
 
-export const isValidShellExpansion = includes(NOT_FOUND);
+export const isValidShellExpansion = S.includes(NOT_FOUND);
 
 export async function parseConfigGrpPath(configGrpPath: string): Promise<ConfigGroup> {
   try {
@@ -96,24 +98,26 @@ export async function parseConfigGrpPath(configGrpPath: string): Promise<ConfigG
     );
   }
 }
-
 function fromRawFileToFile(curr: RawFile) {
   const updatedFileObj = deleteAt('dirent')({ ...curr }) as File;
   return updatedFileObj;
 }
-
 function fromFileArrToFileRecord(initialFileRecord: FileRecord, currentFile: File) {
   initialFileRecord[currentFile.name] = currentFile;
   return initialFileRecord;
 }
 
-export function updateConfigGrpFilesWithNecessaryMetaData(
+export function updateConfigGrpObjWithNecessaryMetaData(
   configGrp: ConfigGroup
 ): ConfigGroup {
   const { fileRecord, destinationRecord } = configGrp;
 
-  const shouldFileBeIgnored = bar(determineFileIgnoreStatus)(destinationRecord);
-  const computeFileDestinationPath = bar(determineFileDestinationPath)(destinationRecord);
+  const shouldFileBeIgnored = operateOnConfigGrpObj(determineFileIgnoreStatus)(
+    destinationRecord
+  );
+  const computeFileDestinationPath = operateOnConfigGrpObj(determineFileDestinationPath)(
+    destinationRecord
+  );
 
   const newFileRecordWithIgnoreStatus = recordMap<File, File>(fileRecordEntry => ({
     ...fileRecordEntry,
@@ -132,8 +136,9 @@ export function updateConfigGrpFilesWithNecessaryMetaData(
   };
 }
 
-// TODO: Improve function name
-function bar<RT>(fn: (destinationRecord: DestinationRecord, fileName: string) => RT) {
+function operateOnConfigGrpObj<RT>(
+  fn: (destinationRecord: DestinationRecord, fileName: string) => RT
+) {
   return (destinationRecord: DestinationRecord) => (fileName: string) =>
     fn(destinationRecord, fileName);
 }
@@ -148,7 +153,7 @@ function determineFileIgnoreStatus(
 
   return namesOfFilesToIgnore === undefined
     ? false
-    : elem(Eq)(fileName)(namesOfFilesToIgnore);
+    : elem(S.Eq)(fileName)(namesOfFilesToIgnore);
 }
 
 function determineFileDestinationPath(

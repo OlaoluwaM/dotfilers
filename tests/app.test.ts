@@ -1,9 +1,8 @@
+/* global describe, test, expect */
 import { map } from 'ramda';
 import { NOT_FOUND } from '../src/constants';
 import { array, string } from 'fp-ts';
-import { expandTokensInString } from '../src/app/helpers';
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { describe, test, expect } from '@jest/globals';
+import { replaceShellVarsInString } from '../src/app/helpers';
 
 describe('Test for helpers', () => {
   test('Should ensure that it is possible to expand shell variables in strings to their original values', () => {
@@ -19,7 +18,7 @@ describe('Test for helpers', () => {
       },
     };
 
-    const mockShellVarExpansionFunc = expandTokensInString(mockShellVariableMap);
+    const mockShellVarExpansionFunc = replaceShellVarsInString(mockShellVariableMap);
 
     // Act
     /* eslint-disable no-template-curly-in-string */

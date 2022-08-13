@@ -13,7 +13,7 @@ import {
   parseConfigGrpPath,
   isValidShellExpansion,
   expandShellVariablesInString,
-  updateConfigGrpFilesWithNecessaryMetaData,
+  updateConfigGrpObjWithNecessaryMetaData,
 } from '@app/helpers';
 
 const linkCmdCliOptionsConfig = {
@@ -32,9 +32,10 @@ const linkCmdCliOptionsConfig = {
 export default async function link(commandArgs: CommandArgs) {
   const { options, positionalArgs: configGrpNames } = parseArgs(commandArgs);
 
-  const configGroups = convertConfigGrpNamesIntoObjs(configGrpNames);
-  const response = await configGroups();
-  console.log(response.left.map(aE => aE.aggregatedMessages));
+  const configGrps = convertConfigGrpNamesIntoObjs(configGrpNames);
+  const response = await configGrps();
+  // console.log(response.left.map(aE => aE.aggregatedMessages));
+  // console.log(Object.assign({}, ...response.right));
 
   // performDesiredOperationBasedOnOptionsPassed(options, configGroups);
 }
@@ -51,7 +52,7 @@ function parseConfigGrpName() {
   return (configGrpName: string) =>
     pipe(
       configGrpName,
-      generateAbsolutePathToConfigGroupDir,
+      generateAbsolutePathToConfigGrpDir,
 
       O.map(determineConfigDirPathValidity),
       O.fold(
@@ -65,6 +66,7 @@ function parseConfigGrpName() {
       ),
 
       TE.chain(parseConfigGrpPathToConfigObj),
+
       TE.mapLeft((error: Error) =>
         newAggregateError([
           error.message,
@@ -74,23 +76,21 @@ function parseConfigGrpName() {
     );
 }
 
-function generateAbsolutePathToConfigGroupDir(configGrpName: string) {
-  const configGroupNamePathWithShellVars =
-    generateConfigGroupNamePathWithShellVars(configGrpName);
-
+function generateAbsolutePathToConfigGrpDir(configGrpName: string) {
   return pipe(
-    configGroupNamePathWithShellVars,
+    configGrpName,
+    generateConfigGrpNamePathWithShellVars,
     map(expandShellVariablesInString),
     filter(not(isValidShellExpansion)),
     (paths: string[]) => head<string>(paths)
   );
 }
-function generateConfigGroupNamePathWithShellVars(configGroupName: string) {
-  return [`$DOTFILES/${configGroupName}`, `$DOTS/${configGroupName}`];
+function generateConfigGrpNamePathWithShellVars(configGrpName: string) {
+  return [`$DOTFILES/${configGrpName}`, `$DOTS/${configGrpName}`];
 }
 
-function determineConfigDirPathValidity(configGroupPath: string) {
-  return pipe(configGroupPath, getPathIfItExists);
+function determineConfigDirPathValidity(configGrpPath: string) {
+  return pipe(configGrpPath, getPathIfItExists);
 }
 function getPathIfItExists(pathToCheck: string) {
   return TE.tryCatch(
@@ -99,11 +99,11 @@ function getPathIfItExists(pathToCheck: string) {
   );
 }
 
-function parseConfigGrpPathToConfigObj(verifiedConfigGroupPath: string) {
+function parseConfigGrpPathToConfigObj(verifiedConfigGrpPath: string) {
   return pipe(
-    verifiedConfigGroupPath,
+    verifiedConfigGrpPath,
     generateConfigGrpObj,
-    TE.map(updateConfigGrpFilesWithNecessaryMetaData)
+    TE.map(updateConfigGrpObjWithNecessaryMetaData)
   );
 }
 function generateConfigGrpObj(configGrpPath: string) {

@@ -16,11 +16,14 @@ if (isCI) {
   testPathIgnorePatterns = defaults.testPathIgnorePatterns;
 }
 
+testPathIgnorePatterns = testPathIgnorePatterns.concat(['/tests/test-data/']);
+
 const config: Config.InitialOptions = {
   preset: 'ts-jest/presets/default-esm',
   testTimeout: 10000,
   testEnvironment: 'node',
   verbose: true,
+  notify: true,
   testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)'],
   collectCoverageFrom,
   testPathIgnorePatterns,

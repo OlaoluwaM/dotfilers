@@ -11,8 +11,6 @@ export const SHELL_ENV_VAR_REGEX =
 
 export const CURLY_BRACKET_REGEX = /[\{\}]/g;
 
-export const STARTING_INDEX_FOR_CMD_ARGS = 3 as const;
-
 export const CONFIG_GRP_DEST_MAP_FILE_NAME = 'destinations.json' as const;
 
 export const NOT_FOUND = '$NOT_FOUND';
@@ -26,6 +24,7 @@ export function getAbsolutePathsForFile(fileUrl: string) {
 }
 
 export const { __dirname } = getAbsolutePathsForFile(import.meta.url);
+// ................
 
 export enum ExitCodes {
   OK = 0,
@@ -35,6 +34,7 @@ export enum ExitCodes {
 }
 
 export const DEFAULT_LEFT_PADDING_SIZE = 3;
+
 export enum KILL_SIGNAL {
   INTERRUPT = 'SIGINT',
   TERMINATE = 'SIGTERM',
