@@ -1,1 +1,46 @@
-export {}
+import { pipe } from 'fp-ts/lib/function';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+export const ALL_FILES_CHAR = '*';
+
+export const EXCLUDE_KEY = '!' as const;
+
+export const SHELL_ENV_VAR_REGEX =
+  /(?:(?:\\{2})*)\$(?:(?:[=|-]?([A-Z0-9_]*[A-Z_]+[A-Z0-9_]*)|(?:{[=|-]?([A-Z0-9_]*[A-Z_]+[A-Z0-9_]*)})))|~/gi;
+
+export const CURLY_BRACKET_REGEX = /[\{\}]/g;
+
+export const STARTING_INDEX_FOR_CMD_ARGS = 3 as const;
+
+export const CONFIG_GRP_DEST_MAP_FILE_NAME = 'destinations.json' as const;
+
+export const NOT_FOUND = '$NOT_FOUND';
+
+// This isn't in the `utils` file to avoid a cyclic dependency error
+export function getAbsolutePathsForFile(fileUrl: string) {
+  return pipe(fileUrl, fileURLToPath, (__filename: string) => ({
+    __filename,
+    __dirname: dirname(__filename),
+  }));
+}
+
+export const { __dirname } = getAbsolutePathsForFile(import.meta.url);
+
+export enum ExitCodes {
+  OK = 0,
+  GENERAL = 1,
+  COMMAND_NOT_FOUND = 127,
+  KILLED = 128,
+}
+
+export const DEFAULT_LEFT_PADDING_SIZE = 3;
+export enum KILL_SIGNAL {
+  INTERRUPT = 'SIGINT',
+  TERMINATE = 'SIGTERM',
+}
+
+export enum KILL_CODE_NUM_MAP {
+  SIGINT = 2,
+  SIGTERM = 15,
+}
