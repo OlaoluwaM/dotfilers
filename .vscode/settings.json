@@ -1,3 +1,19 @@
 {
-  "cSpell.words": ["Dotfilers", "hardlink", "postbuild", "webcompat"]
+  "cSpell.words": [
+    "argp",
+    "cava",
+    "Dotfilers",
+    "Grps",
+    "hardlink",
+    "hardlinked",
+    "hardlinking",
+    "hardlinks",
+    "navi",
+    "neovim",
+    "postbuild",
+    "RNEA",
+    "spicetify",
+    "webcompat"
+  ],
+  "jest.autoRun": "off"
 }
