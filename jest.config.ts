@@ -45,7 +45,7 @@ const config: Config.InitialOptions = {
     '@cmds/(.*)': '<rootDir>/src/cmds/$1',
     '@lib/(.*)': '<rootDir>/src/lib/$1',
     '@config/(.*)': '<rootDir>/src/config/$1',
-    '@utils': '<rootDir>/src/utils/index',
+    '@utils(.*)': '<rootDir>/src/utils/$1',
     '@types': '<rootDir>/src/types/index',
   },
   watchman: false,

@@ -18,6 +18,7 @@
       "eslint-plugin-import",
       "eslint-plugin-jest",
       "jest",
+      "@jest/globals",
       "@types/jest",
       "prettier",
       "ts-node",

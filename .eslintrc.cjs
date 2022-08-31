@@ -72,7 +72,7 @@ module.exports = {
 
     'import/no-extraneous-dependencies': [
       'error',
-      { devDependencies: ['test/**/*.test.ts', 'src/lib/**/test.ts', 'jest.config.ts'] },
+      { devDependencies: ['test/**/*.ts', 'tests/**/*.ts', 'src/lib/**/test.ts', 'jest.config.ts'] },
     ],
   },
 };
