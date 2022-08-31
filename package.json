@@ -40,7 +40,6 @@
     "@types/eslint-config-prettier": "^6.11.0",
     "@types/jest": "^28.1.8",
     "@types/node": "^18.7.13",
-    "@types/node-notifier": "^8.0.2",
     "@types/ora": "^3.2.0",
     "@types/prompts": "^2.0.14",
     "@types/ramda": "^0.28.15",
