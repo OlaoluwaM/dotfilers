@@ -1,7 +1,7 @@
-/* global describe, test, expect */
 import { map } from 'ramda';
 import { NOT_FOUND } from '../src/constants';
 import { array, string } from 'fp-ts';
+import { describe, test, expect } from '@jest/globals';
 import { replaceShellVarsInString } from '../src/app/helpers';
 
 describe('Test for helpers', () => {
@@ -28,6 +28,9 @@ describe('Test for helpers', () => {
       '$HOME/app/${PROD}',
       '$NON_EXISTENT/some/path',
       '$OTHER/in/space',
+      'home/test/dev/sample/rice',
+      'home/test/dev',
+      '',
     ];
     /* eslint-enable no-template-curly-in-string */
 
@@ -39,6 +42,9 @@ describe('Test for helpers', () => {
       `${mockShellVariableMap.HOME}/app/${mockShellVariableMap.PROD}`,
       `${NOT_FOUND}/some/path`,
       `${mockShellVariableMap.OTHER}/in/space`,
+      'home/test/dev/sample/rice',
+      'home/test/dev',
+      '',
     ];
 
     // Assert
