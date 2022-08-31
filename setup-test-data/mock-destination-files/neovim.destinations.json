@@ -1,0 +1,4 @@
+{
+  "config.lua": "~/neovim-place/config",
+  "neovim.user.config.lua": "~/neovim-place/"
+}

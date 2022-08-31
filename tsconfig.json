@@ -1,4 +1,8 @@
 {
+  "ts-node": {
+    "esm": true
+  },
+
   "compilerOptions": {
     /* Visit https://aka.ms/tsconfig to read more about this file */
 
@@ -26,14 +30,17 @@
 
     /* Modules */
     "module": "ESNext" /* Specify what module code is generated. */,
+
     // "rootDir": "./",                                  /* Specify the root folder within your source files. */
     "moduleResolution": "node" /* Specify how TypeScript looks up a file from a given module specifier. */,
-    "baseUrl": "./src" /* Specify the base directory to resolve non-relative module names. */,
+    "baseUrl": "." /* Specify the base directory to resolve non-relative module names. */,
     "paths": {
-      "@app/*": ["app/*"],
-      "@cmds/*": ["cmds/*"],
-      "@lib/*": ["lib/*"],
-      "@config/*": ["config/*"]
+      "@app/*": ["src/app/*"],
+      "@cmds/*": ["src/cmds/*"],
+      "@lib/*": ["src/lib/*"],
+      "@config/*": ["src/config/*"],
+      "@utils/*": ["src/utils/*"],
+      "@types": ["src/types/index"]
     } /* Specify a set of entries that re-map imports to additional lookup locations. */,
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */
     // "typeRoots": [],                                  /* Specify multiple folders that act like './node_modules/@types'. */
