@@ -1,19 +1,57 @@
+import * as N from 'fp-ts/lib/number';
+import * as A from 'fp-ts/lib/Array';
 import * as O from 'fp-ts/lib/Option';
+import * as T from 'fp-ts/lib/Task';
+import * as RA from 'fp-ts/lib/ReadonlyArray';
 import * as TE from 'fp-ts/lib/TaskEither';
+import * as Sep from 'fp-ts/lib/Separated';
+import * as RNEA from 'fp-ts/lib/ReadonlyNonEmptyArray';
 
+import path from 'path';
+import prompts from 'prompts';
 import parseCliArgs from '@lib/minimal-argp';
 
 import { not } from 'fp-ts/lib/Predicate';
-import { pipe } from 'fp-ts/lib/function';
-import { ApplicativePar } from 'fp-ts/lib/Task';
-import { wilt, map, filter, head } from 'fp-ts/lib/Array';
-import { CommandArgs, ConfigGroup } from '@types';
-import { id, doesPathExist, newError, newAggregateError } from '@utils';
+import { chalk } from 'zx';
+import { match, P } from 'ts-pattern';
+import { copyFile } from 'fs/promises';
+import { flow, pipe } from 'fp-ts/lib/function';
+import { contramap } from 'fp-ts/lib/Ord';
+import { compose, lensProp, view } from 'ramda';
 import {
-  parseConfigGrpPath,
+  addError,
+  AggregateError,
+  newAggregateError,
+} from '../utils/AggregateError';
+import {
+  ExitCodes,
+  SHELL_VARS_TO_CONFIG_GRP_DIRS,
+  SHELL_VARS_TO_CONFIG_GRP_DIRS_STR,
+} from '../constants';
+import {
+  ConfigGroup,
+  ConfigGroups,
+  LinkCmdOperationType,
+  File,
+} from '../types/index';
+import {
+  logOutput,
+  logErrors,
+  doesPathExist,
+  symlinkWithOverride,
+  hardlinkWithOverride,
+  getAllDirNamesAtFolderPath,
+  createEntityPathIfItDoesNotExist,
+} from '../utils/index';
+import {
+  exitCli,
+  exitCliWithCodeOnly,
   isValidShellExpansion,
   expandShellVariablesInString,
+  createConfigGrpFromConfigGrpPath,
+  generateConfigGrpNamePathWithShellVars,
   updateConfigGrpObjWithNecessaryMetaData,
+  linkOperationTypeToPastTens,
 } from '@app/helpers';
 
 const linkCmdCliOptionsConfig = {
@@ -29,93 +67,222 @@ const linkCmdCliOptionsConfig = {
   },
 } as const;
 
-export default async function link(commandArgs: CommandArgs) {
-  const { options, positionalArgs: configGrpNames } = parseArgs(commandArgs);
+export default async function main(passedArguments: string[], cliOptions: string[]) {
+  const configGrpNames = A.isEmpty(passedArguments)
+    ? await optionallyGetAllConfigGrpNamesInExistence()
+    : passedArguments;
 
-  const configGrps = convertConfigGrpNamesIntoObjs(configGrpNames);
-  const response = await configGrps();
-  // console.log(response.left.map(aE => aE.aggregatedMessages));
-  // console.log(Object.assign({}, ...response.right));
+  const fatalErrMsg = chalk.red.bold(
+    'Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables? If so, then perhaps you have no configuration groups yet.'
+  );
 
-  // performDesiredOperationBasedOnOptionsPassed(options, configGroups);
+  // eslint-disable-next-line no-return-await
+  const cmdOutput = await match(configGrpNames)
+    .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
+    .with({ _tag: 'None' }, () => exitCli(fatalErrMsg, ExitCodes.GENERAL))
+    .with({ _tag: 'Some' }, (_, some) => linkCmd(some.value, cliOptions))
+    .with(P.array(P.string), (_, value) => linkCmd(value, cliOptions))
+    .exhaustive();
+
+  return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
-function parseArgs(commandArgs: CommandArgs) {
-  return pipe(commandArgs, parseCliArgs(linkCmdCliOptionsConfig));
-}
-
-function convertConfigGrpNamesIntoObjs(configGrpNames: string[]) {
-  return pipe(configGrpNames, wilt(ApplicativePar)(parseConfigGrpName()));
-}
-
-function parseConfigGrpName() {
-  return (configGrpName: string) =>
-    pipe(
-      configGrpName,
-      generateAbsolutePathToConfigGrpDir,
-
-      O.map(determineConfigDirPathValidity),
-      O.fold(
-        () =>
-          TE.left(
-            newError(
-              `Error, could not find config group '${configGrpName}'. Please ensure that the required shell variables are set`
-            )
-          ),
-        id
-      ),
-
-      TE.chain(parseConfigGrpPathToConfigObj),
-
-      TE.mapLeft((error: Error) =>
-        newAggregateError([
-          error.message,
-          `It looks like the '${configGrpName}' config group is not valid or may not exist`,
-        ])
-      )
+async function optionallyGetAllConfigGrpNamesInExistence() {
+  const shouldProceedWithGettingAllConfigGrpNames = () =>
+    prompts(
+      {
+        type: 'confirm',
+        name: 'answer',
+        message: 'Do you wish to operate on all config groups?',
+        initial: false,
+      },
+      { onCancel: () => false }
     );
+
+  // eslint-disable-next-line no-return-await
+  return await pipe(
+    shouldProceedWithGettingAllConfigGrpNames,
+    T.map(({ answer }: { answer: boolean }) =>
+      match(answer)
+        .with(false, () => ExitCodes.OK as const)
+        .with(true, getAllConfigGrpNames)
+        .exhaustive()
+    )
+  )();
+}
+
+async function linkCmd(configGrpNames: string[], cliOptions: string[]) {
+  const chosenLinkCmdOperationFn = pipe(
+    cliOptions,
+    parseCmdOptions,
+    createChosenLinkCmdOperationFn
+  );
+
+  const configGrpsWithErrors = await createConfigGrpObjs(configGrpNames)();
+  const { left: configGrpCreationErrs, right: configGrps } = configGrpsWithErrors;
+
+  const operationFeedback = await chosenLinkCmdOperationFn(configGrps)();
+  const { left: operationErrors, right: operationOutput } = operationFeedback;
+
+  pipe(
+    logOutput(operationOutput)(),
+    logErrors(configGrpCreationErrs.concat(operationErrors))
+  );
+
+  // NOTE: This return is for testing purposes only
+  return configGrps;
+}
+
+async function getAllConfigGrpNames() {
+  const byLength = pipe(
+    N.Ord,
+    contramap((arr: string[]) => arr.length)
+  );
+
+  const allPossibleConfigGrpNames = await pipe(
+    SHELL_VARS_TO_CONFIG_GRP_DIRS,
+    RA.wilt(T.ApplicativePar)(
+      compose(getAllDirNamesAtFolderPath, expandShellVariablesInString)
+    )
+  )();
+
+  const { right: allConfigGrpNamesOption } = pipe(
+    allPossibleConfigGrpNames,
+    Sep.map(flow(RA.sortBy([byLength]), RA.head))
+  );
+
+  return allConfigGrpNamesOption;
+}
+
+function parseCmdOptions(rawCmdOptions: string[]) {
+  const { options: parsedLinkCmdOptions } = pipe(
+    rawCmdOptions,
+    parseCliArgs(linkCmdCliOptionsConfig)
+  );
+
+  return determineLinkCmdOperationToPerform(parsedLinkCmdOptions);
+}
+
+function createConfigGrpObjs(configGrpNames: string[]) {
+  return pipe(
+    configGrpNames,
+    A.wilt(T.ApplicativePar)(transformConfigGrpNameIntoConfigGrpObj)
+  );
+}
+
+function transformConfigGrpNameIntoConfigGrpObj(configGrpName: string) {
+  return pipe(
+    configGrpName,
+    generateAbsolutePathToConfigGrpDir,
+    TE.fromOption(() => newAggregateError('')),
+    TE.chain(doesPathExist),
+    TE.mapLeft(handleConfigGrpDirPathValidityErr(configGrpName)),
+    TE.chain(createConfigGrpFromConfigGrpPath),
+    TE.map(updateConfigGrpObjWithNecessaryMetaData)
+  );
 }
 
 function generateAbsolutePathToConfigGrpDir(configGrpName: string) {
   return pipe(
     configGrpName,
     generateConfigGrpNamePathWithShellVars,
-    map(expandShellVariablesInString),
-    filter(not(isValidShellExpansion)),
-    (paths: string[]) => head<string>(paths)
-  );
-}
-function generateConfigGrpNamePathWithShellVars(configGrpName: string) {
-  return [`$DOTFILES/${configGrpName}`, `$DOTS/${configGrpName}`];
-}
-
-function determineConfigDirPathValidity(configGrpPath: string) {
-  return pipe(configGrpPath, getPathIfItExists);
-}
-function getPathIfItExists(pathToCheck: string) {
-  return TE.tryCatch(
-    () => doesPathExist(pathToCheck),
-    reason => reason as Error
+    RNEA.map(expandShellVariablesInString),
+    RA.filter(not(isValidShellExpansion)),
+    RA.head
   );
 }
 
-function parseConfigGrpPathToConfigObj(verifiedConfigGrpPath: string) {
-  return pipe(
-    verifiedConfigGrpPath,
-    generateConfigGrpObj,
-    TE.map(updateConfigGrpObjWithNecessaryMetaData)
-  );
-}
-function generateConfigGrpObj(configGrpPath: string) {
-  return TE.tryCatch<Error, ConfigGroup>(
-    () => parseConfigGrpPath(configGrpPath),
-    reason => reason as Error
+function handleConfigGrpDirPathValidityErr(configGrpName: string) {
+  return addError(
+    `It looks like the '${configGrpName}' config group does not exist. Is the required environment variable (${SHELL_VARS_TO_CONFIG_GRP_DIRS_STR}) set?`
   );
 }
 
-// function performDesiredOperationBasedOnOptionsPassed(
-//   options: { readonly [x: string]: string | boolean },
-//   configGroups: any
-// ) {
-//   throw new Error('Function not implemented.');
-// }
+interface ParsedLinkCmdOptions {
+  readonly hardlink: boolean;
+  readonly copy: boolean;
+}
+function determineLinkCmdOperationToPerform(
+  parsedLinkCmdOptions: ParsedLinkCmdOptions
+) {
+  type ValidLinkCmdOptionConfiguration =
+    | [true, false]
+    | [false, true]
+    | [false, false];
+
+  const { hardlink, copy } = parsedLinkCmdOptions;
+  const linkCmdOperationConfiguration = [
+    hardlink,
+    copy,
+  ] as ValidLinkCmdOptionConfiguration;
+
+  return match(linkCmdOperationConfiguration)
+    .with([true, false], () => 'hardlink')
+    .with([false, true], () => 'copy')
+    .with([false, false], () => 'symlink')
+    .otherwise(() => 'symlink') as LinkCmdOperationType;
+}
+
+function createChosenLinkCmdOperationFn(
+  linkCmdOperationToPerform: LinkCmdOperationType
+) {
+  return (configGrpObjs: ConfigGroups) => {
+    const linkCmdOperationFn = createLinkOperationFn(linkCmdOperationToPerform);
+
+    return pipe(
+      configGrpObjs,
+      A.map(getFilesFromConfigGrp),
+      A.flatten,
+      A.filter<File>(isNotIgnored),
+
+      A.wilt(T.ApplicativePar)(({ path: sourcePath, destinationPath }) =>
+        linkCmdOperationFn(sourcePath, destinationPath)
+      )
+    );
+  };
+}
+
+function createLinkOperationFn(linkOperationType: LinkCmdOperationType) {
+  return (pathToSourceEntity: string, destinationPath: string) =>
+    TE.tryCatch(
+      async () => {
+        await pipe(
+          createEntityPathIfItDoesNotExist(path.dirname(destinationPath)),
+          T.chain(
+            () => () =>
+              match(linkOperationType)
+                .with('copy', () => copyFile(pathToSourceEntity, destinationPath))
+
+                .with('hardlink', () =>
+                  hardlinkWithOverride(pathToSourceEntity, destinationPath)
+                )
+
+                .with('symlink', () =>
+                  symlinkWithOverride(pathToSourceEntity, destinationPath)
+                )
+                .exhaustive()
+          )
+        )();
+
+        const fileName = path.basename(pathToSourceEntity);
+        return `${linkOperationTypeToPastTens[linkOperationType]} ${fileName} → ${destinationPath}`;
+      },
+
+      reason => {
+        const errorMsg = `Could not create ${linkOperationType} for ${pathToSourceEntity} to ${destinationPath}. ${
+          (reason as Error).message
+        }`;
+
+        return newAggregateError(errorMsg);
+      }
+    );
+}
+
+function getFilesFromConfigGrp(configGrpObj: ConfigGroup) {
+  const filesLens = lensProp<ConfigGroup, 'files'>('files');
+  return view(filesLens, configGrpObj);
+}
+
+function isNotIgnored(fileObj: File): boolean {
+  return fileObj.ignore === false;
+}

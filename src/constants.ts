@@ -6,14 +6,13 @@ export const ALL_FILES_CHAR = '*';
 
 export const EXCLUDE_KEY = '!' as const;
 
-export const SHELL_ENV_VAR_REGEX =
-  /(?:(?:\\{2})*)\$(?:(?:[=|-]?([A-Z0-9_]*[A-Z_]+[A-Z0-9_]*)|(?:{[=|-]?([A-Z0-9_]*[A-Z_]+[A-Z0-9_]*)})))|~/gi;
-
-export const CURLY_BRACKET_REGEX = /[\{\}]/g;
-
 export const CONFIG_GRP_DEST_MAP_FILE_NAME = 'destinations.json' as const;
 
 export const NOT_FOUND = '$NOT_FOUND';
+
+export const SHELL_VARS_TO_CONFIG_GRP_DIRS = ['$DOTFILES', '$DOTS'] as const;
+
+export const SHELL_VARS_TO_CONFIG_GRP_DIRS_STR = '$DOTFILES or $DOTS' as const;
 
 // This isn't in the `utils` file to avoid a cyclic dependency error
 export function getAbsolutePathsForFile(fileUrl: string) {
@@ -24,7 +23,6 @@ export function getAbsolutePathsForFile(fileUrl: string) {
 }
 
 export const { __dirname } = getAbsolutePathsForFile(import.meta.url);
-// ................
 
 export enum ExitCodes {
   OK = 0,
