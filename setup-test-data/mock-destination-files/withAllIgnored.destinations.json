@@ -1,0 +1,6 @@
+{
+  "config.txt": "~",
+  "sample.json": "$HOME/.config/btop",
+  "script.sh": "$HOME/.config/scripts/somewhere/nowhere",
+  "!": "*"
+}
