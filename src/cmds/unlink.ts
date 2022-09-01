@@ -3,15 +3,18 @@ import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
 
-import createConfigGrpObjs from '@app/configGrpOps';
-
 import { chalk } from 'zx';
 import { match, P } from 'ts-pattern';
 import { ExitCodes } from '../constants';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { removeEntityAt } from '../utils/index';
 import { lensProp, view } from 'ramda';
-import { File, ConfigGroup, ConfigGroups, CmdResponse } from '../types/index';
+import { File, ConfigGroups, CmdResponse } from '../types/index';
+import {
+  isNotIgnored,
+  getFilesFromConfigGrp,
+  default as createConfigGrpObjs,
+} from '@app/configGrpOps';
 import {
   exitCli,
   exitCliWithCodeOnly,
@@ -67,26 +70,17 @@ function getDestinationPathsForAllValidFiles(configGrps: ConfigGroups) {
   );
 }
 
-function getFilesFromConfigGrp(configGrpObj: ConfigGroup) {
-  const filesLens = lensProp<ConfigGroup, 'files'>('files');
-  return view(filesLens, configGrpObj);
-}
-
 function getDestinationPathForFileObjsThatAreNotIgnored(fileObj: File) {
   return pipe(
     fileObj,
     O.fromPredicate(isNotIgnored),
-    O.map(getDestinationPathFromFileObj)
+    O.map(getDestinationPathForFileObj)
   );
 }
 
-function getDestinationPathFromFileObj(configGrpFileObj: File) {
+function getDestinationPathForFileObj(configGrpFileObj: File) {
   const destinationPathLens = lensProp<File, 'destinationPath'>('destinationPath');
   return view(destinationPathLens, configGrpFileObj);
-}
-
-function isNotIgnored(fileObj: File): boolean {
-  return fileObj.ignore === false;
 }
 
 function undoOperationPerformedByLinkCmd(destinationPaths: string[]) {

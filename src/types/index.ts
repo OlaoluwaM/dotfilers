@@ -55,5 +55,5 @@ export interface AbsFilePath
 export interface CmdResponse<T> {
   errors: AggregateError[] | string[];
   output: string[];
-  forTest: T;
+  forTest: T; // NOTE: This return is for testing purposes only
 }
