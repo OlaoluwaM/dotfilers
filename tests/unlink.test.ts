@@ -25,13 +25,9 @@ describe('Tests for the happy path', () => {
     await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES);
 
     // Act
-    const {
-      errors,
-      output,
-      forTest: destinationPaths,
-    } = await unlinkCmd(VALID_MOCK_CONFIG_GRP_NAMES);
-
-    console.log({ errors, output });
+    const { forTest: destinationPaths } = await unlinkCmd(
+      VALID_MOCK_CONFIG_GRP_NAMES
+    );
 
     const areAllDestinationFilesPresentAtTheirDestinationPaths =
       await checkIfAllPathsAreValid(destinationPaths)();
