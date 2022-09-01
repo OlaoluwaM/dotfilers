@@ -110,9 +110,12 @@ export const valueIs = {
 
 export function removeEntityAt(
   filePath: string
-): TE.TaskEither<AggregateError, void> {
+): TE.TaskEither<AggregateError, string> {
   return TE.tryCatch(
-    () => unlink(filePath),
+    async () => {
+      await unlink(filePath);
+      return filePath
+    },
     reason =>
       newAggregateError(
         `Error deleting entity at path ${filePath}: ${(reason as Error).message}`

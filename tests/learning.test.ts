@@ -1,8 +1,8 @@
-/* global describe, test, expect */
 import { globby, $ } from 'zx';
 import { TEST_DATA_DIR_PREFIX } from './setup';
+import { describe, test, expect } from '@jest/globals';
 
-describe.skip('Learning tests to verify behavior of globby package', () => {
+describe('Learning tests to verify behavior of globby package', () => {
   test("That globby doesn't error, but instead returns an empty array on no match", async () => {
     // Arrange
     const testDataDir = `${TEST_DATA_DIR_PREFIX}/learning/globby`;
@@ -32,11 +32,7 @@ describe.skip('Learning tests to verify behavior of globby package', () => {
       objectMode: true,
     });
 
-    console.log({ discoveredFiles });
-
     // Assert
     expect(discoveredFiles).toHaveLength(numberOfNonTsFiles.length - 1);
   });
 });
-
-describe.skip('Learning tests to verify behavior of some fp-ts modules and operations', () => {});

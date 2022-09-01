@@ -1,25 +1,30 @@
+import * as N from 'fp-ts/lib/number';
+import * as Sep from 'fp-ts/lib/Separated';
 import * as T from 'fp-ts/lib/Task';
 import * as R from 'fp-ts/lib/Record';
 import * as S from 'fp-ts/lib/string';
 import * as O from 'fp-ts/lib/Option';
-import * as A from 'fp-ts/lib/Array';
 import * as E from 'fp-ts/lib/Either';
 import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 import * as RA from 'fp-ts/lib/ReadonlyArray';
 
 import path from 'path';
+import prompts from 'prompts';
 
-import { pipe } from 'fp-ts/lib/function';
 import { Reader } from 'fp-ts/Reader';
+import { match } from 'ts-pattern';
 import { addError } from '../utils/AggregateError';
-import { compose, omit, pick, replace } from 'ramda';
+import { contramap } from 'fp-ts/lib/Ord';
+import { flow, pipe } from 'fp-ts/lib/function';
 import { elem, map, reduce } from 'fp-ts/lib/Array';
+import { compose, omit, pick, replace } from 'ramda';
 import { deleteAt, map as recordMap, toArray } from 'fp-ts/lib/Record';
 import {
   readJson,
   getAllFilesFromDirectory,
   getOnlyValueFromEntriesArr,
+  getAllDirNamesAtFolderPath,
   transformNonStringPrimitivesToStrings,
   trace,
 } from '../utils/index';
@@ -315,3 +320,48 @@ export const linkOperationTypeToPastTens: Record<LinkCmdOperationType, string> =
   hardlink: 'hardlinked',
   symlink: 'symlinked',
 };
+
+export async function optionallyGetAllConfigGrpNamesInExistence() {
+  const shouldProceedWithGettingAllConfigGrpNames = () =>
+    prompts(
+      {
+        type: 'confirm',
+        name: 'answer',
+        message: 'Do you wish to operate on all config groups?',
+        initial: false,
+      },
+      { onCancel: () => false }
+    );
+
+  // eslint-disable-next-line no-return-await
+  return await pipe(
+    shouldProceedWithGettingAllConfigGrpNames,
+    T.map(({ answer }: { answer: boolean }) =>
+      match(answer)
+        .with(false, () => ExitCodes.OK as const)
+        .with(true, getAllConfigGrpNames)
+        .exhaustive()
+    )
+  )();
+}
+
+async function getAllConfigGrpNames() {
+  const byLength = pipe(
+    N.Ord,
+    contramap((arr: string[]) => arr.length)
+  );
+
+  const allPossibleConfigGrpNames = await pipe(
+    SHELL_VARS_TO_CONFIG_GRP_DIRS,
+    RA.wilt(T.ApplicativePar)(
+      compose(getAllDirNamesAtFolderPath, expandShellVariablesInString)
+    )
+  )();
+
+  const { right: allConfigGrpNamesOption } = pipe(
+    allPossibleConfigGrpNames,
+    Sep.map(flow(RA.sortBy([byLength]), RA.head))
+  );
+
+  return allConfigGrpNamesOption;
+}
