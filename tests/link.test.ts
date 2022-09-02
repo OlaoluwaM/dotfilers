@@ -1,6 +1,8 @@
-import * as T from 'fp-ts/lib/Task';
 import * as A from 'fp-ts/lib/Array';
+import * as E from 'fp-ts/lib/Either';
 import * as S from 'fp-ts/lib/string';
+import * as T from 'fp-ts/lib/Task';
+import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
 import prompts from 'prompts';
@@ -13,15 +15,18 @@ import { MonoidAll, MonoidAny } from 'fp-ts/lib/boolean';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { getFilesFromConfigGrp } from '@app/configGrpOps';
 import { compose, lensProp, view } from 'ramda';
+import { getAllDirNamesAtFolderPath } from '@utils/index';
 import { describe, test, expect, beforeAll } from '@jest/globals';
 import { ExitCodes, SHELL_VARS_TO_CONFIG_GRP_DIRS } from '../src/constants';
 import {
   isSymlink,
   isHardlink,
+  manualFail,
   doesPathExist,
   checkIfAllPathsAreValid,
   getDestinationPathFromFileObj,
   getDestinationPathsFromConfigGrp,
+  getDestinationPathsOfIgnoredFiles,
 } from './helpers';
 
 const LINK_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/link`;
@@ -49,12 +54,16 @@ function getSourcePathFromFileObj(configGrpFileObj: File) {
 const VALID_MOCK_CONFIG_GRP_NAMES = ['npm', 'bat', 'neovim', 'git'];
 
 describe('Tests for the happy path', () => {
-  test(`Should ensure that symlinks are correctly created at intended destinations with both ${SHELL_VARS_TO_CONFIG_GRP_DIRS[0]} and ${SHELL_VARS_TO_CONFIG_GRP_DIRS[1]} variables set`, async () => {
+  test(`Should ensure that link command correctly creates symlinks of files at their intended destinations when both ${SHELL_VARS_TO_CONFIG_GRP_DIRS[0]} and ${SHELL_VARS_TO_CONFIG_GRP_DIRS[1]} variables are set`, async () => {
     // Arrange
     // Act
-    const { forTest: output } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, []);
+    const {
+      errors,
+      output: actualCmdOutput,
+      forTest: outputForTests,
+    } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES);
 
-    const destinationPaths = getDestinationPathsFromConfigGrp(output);
+    const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
 
     const doAllDestinationSymlinksExist = await pipe(
       destinationPaths,
@@ -64,17 +73,25 @@ describe('Tests for the happy path', () => {
     )();
 
     // Assert
+    expect(errors).toEqual([]);
     expect(doAllDestinationSymlinksExist).toBeTruthy();
+    expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
+      VALID_MOCK_CONFIG_GRP_NAMES.length
+    );
   });
 
-  test(`Should ensure that symlinks are correctly created at intended destinations with only the ${SHELL_VARS_TO_CONFIG_GRP_DIRS[0]} variable set`, async () => {
+  test(`Should ensure that link command correctly creates symlinks of files at their intended destinations when only the ${SHELL_VARS_TO_CONFIG_GRP_DIRS[0]} variable is set`, async () => {
     // Arrange
     process.env.DOTS = '';
 
     // Act
-    const { forTest: output } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, []);
+    const {
+      errors,
+      output: actualCmdOutput,
+      forTest: outputForTests,
+    } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES);
 
-    const destinationPaths = getDestinationPathsFromConfigGrp(output);
+    const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
 
     const doAllDestinationSymlinksExist = await pipe(
       destinationPaths,
@@ -84,20 +101,28 @@ describe('Tests for the happy path', () => {
     )();
 
     // Assert
+    expect(errors).toEqual([]);
     expect(doAllDestinationSymlinksExist).toBeTruthy();
+    expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
+      VALID_MOCK_CONFIG_GRP_NAMES.length
+    );
 
     // Cleanup
     process.env.DOTS = process.env.DOTFILES;
   });
 
-  test(`Should ensure that symlinks are correctly created at intended destinations with only the ${SHELL_VARS_TO_CONFIG_GRP_DIRS[1]} variable set`, async () => {
+  test(`Should ensure that link command correctly creates symlinks of files at their intended destinations when only the ${SHELL_VARS_TO_CONFIG_GRP_DIRS[1]} variable is set`, async () => {
     // Arrange
     process.env.DOTFILES = '';
 
     // Act
-    const { forTest: output } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, []);
+    const {
+      errors,
+      output: actualCmdOutput,
+      forTest: outputForTests,
+    } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES);
 
-    const destinationPaths = getDestinationPathsFromConfigGrp(output);
+    const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
 
     const doAllDestinationSymlinksExist = await pipe(
       destinationPaths,
@@ -107,21 +132,29 @@ describe('Tests for the happy path', () => {
     )();
 
     // Assert
+    expect(errors).toEqual([]);
     expect(doAllDestinationSymlinksExist).toBeTruthy();
+    expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
+      VALID_MOCK_CONFIG_GRP_NAMES.length
+    );
 
     // Cleanup
     process.env.DOTFILES = process.env.DOTS;
   });
 
   test.each([['--hardlink'], ['-H']])(
-    'Should ensure that hardlinks can be used instead of symlinks if we supply the %s option',
+    'Should ensure that link command hardlinks files to their destination instead of symlinking if we supply the %s option',
     async mockOptions => {
       // Arrange
       // Act
-      const { forTest: output } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [mockOptions]);
+      const {
+        errors,
+        output: actualCmdOutput,
+        forTest: outputForTests,
+      } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [mockOptions]);
 
       const sourceAndDestinationPaths = pipe(
-        output,
+        outputForTests,
         A.map(
           compose(
             A.map(getSourceAndDestinationPathsFromFileObj),
@@ -143,34 +176,50 @@ describe('Tests for the happy path', () => {
       )();
 
       // Assert
+      expect(errors).toEqual([]);
       expect(doAllDestinationHardlinksExist).toBeTruthy();
+      expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
+        VALID_MOCK_CONFIG_GRP_NAMES.length
+      );
     }
   );
 
   test.each([['--copy'], ['-c']])(
-    'Should ensure that copy can be created instead of a symlink if we supply the %s option',
+    'Should ensure that link command copies files to their destination instead of symlinking them if we supply the %s option',
     async mockOptions => {
       // Arrange
       // Act
-      const { forTest: output } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [mockOptions]);
+      const {
+        errors,
+        output: actualCmdOutput,
+        forTest: outputForTests,
+      } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [mockOptions]);
 
-      const destinationPaths = getDestinationPathsFromConfigGrp(output);
+      const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
 
       const doAllDestinationFilesExist = await checkIfAllPathsAreValid(
         destinationPaths
       )();
 
       // Assert
+      expect(errors).toEqual([]);
       expect(doAllDestinationFilesExist).toBeTruthy();
+      expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
+        VALID_MOCK_CONFIG_GRP_NAMES.length
+      );
     }
   );
 
-  test('Should ensure that command defaults to symlinks should clashing options be supplied (--hardlink and --copy)', async () => {
+  test('Should ensure that the link command defaults to symlinking files to their destinations should clashing options be supplied (--hardlink and --copy)', async () => {
     // Arrange
     // Act
-    const { forTest: output } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, ['-H', '--copy']);
+    const {
+      errors,
+      output: actualCmdOutput,
+      forTest: outputForTests,
+    } = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, ['-H', '--copy']);
 
-    const destinationPaths = getDestinationPathsFromConfigGrp(output);
+    const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
 
     const doAllDestinationSymlinksExist = await pipe(
       destinationPaths,
@@ -180,7 +229,11 @@ describe('Tests for the happy path', () => {
     )();
 
     // Assert
+    expect(errors).toEqual([]);
     expect(doAllDestinationSymlinksExist).toBeTruthy();
+    expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
+      VALID_MOCK_CONFIG_GRP_NAMES.length
+    );
   });
 
   test.each([
@@ -188,7 +241,7 @@ describe('Tests for the happy path', () => {
     ['hardlinking', ['-H', '--hardlink']],
     ['copying', ['-c', '--copy']],
   ])(
-    'Should ensure that command defaults to %s all config groups if none are specified',
+    'Should ensure that the link command defaults to %s files of all config groups to their destinations if no config group is explicitly specified',
     async (_, mockOptions) => {
       // Arrange
       process.env.DOTFILES = `${LINK_TEST_DATA_DIR}/valid-mock-dots`;
@@ -197,9 +250,13 @@ describe('Tests for the happy path', () => {
       prompts.inject([true]);
 
       // Act
-      const { forTest: output } = await linkCmd([], mockOptions);
+      const {
+        errors,
+        output: actualCmdOutput,
+        forTest: outputForTests,
+      } = await linkCmd([], mockOptions);
 
-      const destinationPaths = getDestinationPathsFromConfigGrp(output);
+      const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
 
       const doAllDestinationPathsExist = await pipe(
         destinationPaths,
@@ -208,8 +265,22 @@ describe('Tests for the happy path', () => {
         T.map(concatAll(MonoidAll))
       )();
 
+      const numberOfDirectoriesInDotfilesFolder = await pipe(
+        process.env.DOTFILES,
+        getAllDirNamesAtFolderPath,
+        TE.map(A.size)
+      )();
+
       // Assert
-      expect(doAllDestinationPathsExist).toBeTruthy();
+      pipe(
+        numberOfDirectoriesInDotfilesFolder,
+        E.chainFirst(() => E.right(expect(errors).toEqual([]))),
+        E.chainFirstW(() =>
+          E.right(expect(doAllDestinationPathsExist).toBeTruthy())
+        ),
+
+        E.fold(manualFail, expect(actualCmdOutput.length).toBeGreaterThanOrEqual)
+      );
 
       // Cleanup
       process.env.DOTS = `${LINK_TEST_DATA_DIR}/mock-dots`;
@@ -218,41 +289,66 @@ describe('Tests for the happy path', () => {
   );
 
   test.each([
-    ['does nothing if all files in config group are ignored', ['withAllIgnored']],
-    ['only operates on those files that are not being ignored', ['withSomeIgnored']],
+    ['does nothing if all files in a config group are ignored', ['withAllIgnored']],
+    [
+      'only operates on those files within a config group that are not being ignored',
+      ['withSomeIgnored'],
+    ],
   ])(
-    `Should ensure that command %s`,
+    `Should ensure that link command %s`,
     async (testDescription, mockConfigGrpNames) => {
       // Arrange
       // Act
-      const { forTest: output } = await linkCmd(mockConfigGrpNames, []);
+      const {
+        errors,
+        output: actualCmdOutput,
+        forTest: outputForTests,
+      } = await linkCmd(mockConfigGrpNames);
 
-      const destinationPaths = getDestinationPathsFromConfigGrp(output);
+      const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
+      const destinationPathsOfIgnoredFilesOnly =
+        getDestinationPathsOfIgnoredFiles(outputForTests);
 
-      const doAllDestinationSymlinksExist = await pipe(
+      const doThoseNonIgnoredDestinationSymlinksExist = await pipe(
         destinationPaths,
         A.map(destinationPath => () => isSymlink(destinationPath)),
         T.sequenceArray,
         T.map(concatAll(MonoidAny))
       )();
 
-      // Assert
       const isTestForIgnoringAllFiles = testDescription.includes('all');
 
+      // Assert
+      expect(errors).toEqual([]);
+
       if (isTestForIgnoringAllFiles) {
-        expect(doAllDestinationSymlinksExist).toBeFalsy();
-      } else expect(doAllDestinationSymlinksExist).toBeTruthy();
+        expect(actualCmdOutput).toEqual([]);
+        expect(doThoseNonIgnoredDestinationSymlinksExist).toBeFalsy();
+      } else {
+        expect(doThoseNonIgnoredDestinationSymlinksExist).toBeTruthy();
+
+        const numberOfOperatedOnFiles =
+          destinationPaths.length - destinationPathsOfIgnoredFilesOnly.length;
+
+        expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
+          numberOfOperatedOnFiles
+        );
+      }
     }
   );
 
-  test(`Should ensure that command operates successfully when all files in config group are directed to the same destination path`, async () => {
+  test(`Should ensure that link command operates successfully when all files in config group are directed to the same destination path`, async () => {
     // Arrange
     const mockConfigGrpNames = ['withAllDotsToOneLoc'];
 
     // Act
-    const { forTest: output } = await linkCmd(mockConfigGrpNames, []);
+    const {
+      errors,
+      output: actualCmdOutput,
+      forTest: outputForTests,
+    } = await linkCmd(mockConfigGrpNames);
 
-    const destinationPaths = getDestinationPathsFromConfigGrp(output);
+    const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
 
     const doAllDestinationSymlinksExist = await pipe(
       destinationPaths,
@@ -262,13 +358,15 @@ describe('Tests for the happy path', () => {
     )();
 
     // Assert
+    expect(errors).toEqual([]);
     expect(doAllDestinationSymlinksExist).toBeTruthy();
+    expect(actualCmdOutput.length).toBeGreaterThanOrEqual(mockConfigGrpNames.length);
   });
 
   test.each([
     ['', ['tilix']],
     [
-      'even if destination record file has entries with invalid destination paths',
+      'even if destination record file has entries with some invalid destination path values',
       ['withPathIssues'],
     ],
   ])(
@@ -276,9 +374,13 @@ describe('Tests for the happy path', () => {
     async (_, mockConfigGrpNames) => {
       // Arrange
       // Act
-      const { forTest: output } = await linkCmd(mockConfigGrpNames, []);
+      const {
+        errors,
+        output: actualCmdOutput,
+        forTest: outputForTests,
+      } = await linkCmd(mockConfigGrpNames);
 
-      const destinationPaths = getDestinationPathsFromConfigGrp(output);
+      const destinationPaths = getDestinationPathsFromConfigGrp(outputForTests);
 
       const doAllDestinationSymlinksExist = await pipe(
         destinationPaths,
@@ -294,53 +396,70 @@ describe('Tests for the happy path', () => {
       );
 
       // Assert
-      expect(allDestinationPathsPointToTheHomeDirectory).toBeTruthy();
+      expect(errors).toEqual([]);
       expect(doAllDestinationSymlinksExist).toBeTruthy();
+      expect(allDestinationPathsPointToTheHomeDirectory).toBeTruthy();
+      expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
+        mockConfigGrpNames.length
+      );
     }
   );
 });
 
 describe('Tests for everything but the happy path', () => {
   const INVALID_MOCK_CONFIG_GRP_NAMES = ['node', 'spicetify', 'notion', 'cava'];
-  test('Should check that no operation is performed if configuration group names do not exist', async () => {
+
+  test('Should check that no operation is performed if config groups do not exist', async () => {
     // Arrange
     // Act
-    const { forTest: output } = await linkCmd(INVALID_MOCK_CONFIG_GRP_NAMES, []);
+    const {
+      errors,
+      output: actualCmdOutput,
+      forTest: outputForTests,
+    } = await linkCmd(INVALID_MOCK_CONFIG_GRP_NAMES);
 
     // Assert
-    expect(output).toEqual([]);
+    expect([outputForTests, actualCmdOutput]).toEqual([[], []]);
+    expect(errors.length).toBeGreaterThanOrEqual(
+      INVALID_MOCK_CONFIG_GRP_NAMES.length
+    );
   });
 
   test.each([
     ['invalid', INVALID_MOCK_CONFIG_GRP_NAMES],
     ['valid', VALID_MOCK_CONFIG_GRP_NAMES],
   ])(
-    'Should check that command fails gracefully should the necessary env variables be unset and we were to supply %s config group names',
+    'Should check that link command fails gracefully if the necessary environment variables were not set and we were to supply %s config group names',
     async (_, mockConfigGrpNames) => {
       // Arrange
       const PREV_DOTFILES_ENV_VAR_VALUE = process.env.DOTFILES;
 
-      process.env.DOTFILES = '';
       process.env.DOTS = '';
+      process.env.DOTFILES = '';
 
       // Act
-      const { forTest: output } = await linkCmd(mockConfigGrpNames, []);
+      const {
+        errors,
+        output: actualCmdOutput,
+        forTest: outputForTests,
+      } = await linkCmd(mockConfigGrpNames);
 
       // Assert
-      expect(output).toEqual([]);
+      expect([outputForTests, actualCmdOutput]).toEqual([[], []]);
+      expect(errors.length).toBeGreaterThanOrEqual(mockConfigGrpNames.length);
 
       // Cleanup
-      process.env.DOTFILES = PREV_DOTFILES_ENV_VAR_VALUE;
       process.env.DOTS = PREV_DOTFILES_ENV_VAR_VALUE;
+      process.env.DOTFILES = PREV_DOTFILES_ENV_VAR_VALUE;
     }
   );
 
-  test('Should ensure that command exits gracefully should we decline to operate on all config groups', async () => {
+  test('Should ensure that link command exits gracefully should we decline to operate on all config groups', async () => {
     // Arrange
     prompts.inject([false]);
 
     // Act
-    await linkCmd([], []);
+    await linkCmd([]);
 
     // Assert
     expect(process.exit).toHaveBeenCalledWith(ExitCodes.OK);
