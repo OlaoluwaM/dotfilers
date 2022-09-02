@@ -1,3 +1,4 @@
+import { AggregateError } from '@utils/AggregateError';
 import { Entry } from 'fast-glob';
 import { Newtype } from 'newtype-ts';
 import { ALL_FILES_CHAR, EXCLUDE_KEY } from '../constants';
@@ -50,3 +51,9 @@ export type isOptional<Structure, MemberUnion extends keyof Structure> = Omit<
 
 export interface AbsFilePath
   extends Newtype<{ readonly AbsFilePath: unique symbol }, string> {}
+
+export interface CmdResponse<T> {
+  errors: AggregateError[] | string[];
+  output: string[];
+  forTest: T; // NOTE: This return is for testing purposes only
+}

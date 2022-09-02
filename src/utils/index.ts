@@ -8,19 +8,23 @@ import boxen from 'boxen';
 
 import { pipe } from 'fp-ts/lib/function';
 import { MonoidAll } from 'fp-ts/lib/boolean';
-import { AnyObject, Primitive, RawFile } from '@types';
 import { filter as recordFilter } from 'fp-ts/lib/Record';
 import { chalk, fs as fsExtra, globby } from 'zx';
+import { AnyObject, Primitive, RawFile } from '@types';
 import { CONFIG_GRP_DEST_MAP_FILE_NAME } from '../constants';
-import { AggregateError, newAggregateError } from './AggregateError';
+import {
+  AggregateError,
+  getErrorMessagesFromAggregateErr,
+  newAggregateError,
+} from './AggregateError';
+import { not, isEmpty, slice, lensProp, view } from 'ramda';
 import { mkdir, unlink, link, symlink, readdir } from 'fs/promises';
-import { not, isEmpty, slice, lensProp, view, toString } from 'ramda';
 
 export function getCLIArguments(startingInd: number) {
   return slice(startingInd, Infinity)(process.argv);
 }
 
-// For debugging purposes only
+// NOTE: For debugging purposes only
 export function trace<T>(...logContents: string[]) {
   return (val: T) => {
     const otherLogContents = isEmpty(logContents) ? ['Output: '] : logContents;
@@ -86,33 +90,14 @@ export function rawTypeOf(value: unknown): RawTypes {
     .toLocaleLowerCase() as RawTypes;
 }
 
-export const valueIs = {
-  aString(val: unknown): val is string {
-    return rawTypeOf(val) === 'string';
-  },
-
-  anArray(val: unknown): val is unknown[] {
-    return rawTypeOf(val) === 'array';
-  },
-
-  anObject(val: unknown): val is AnyObject {
-    return rawTypeOf(val) === 'object';
-  },
-
-  aNumber(val: unknown): val is number {
-    return rawTypeOf(val) === 'number';
-  },
-
-  true(val: unknown): val is true {
-    return val === true;
-  },
-};
-
 export function removeEntityAt(
   filePath: string
-): TE.TaskEither<AggregateError, void> {
+): TE.TaskEither<AggregateError, string> {
   return TE.tryCatch(
-    () => unlink(filePath),
+    async () => {
+      await unlink(filePath);
+      return filePath;
+    },
     reason =>
       newAggregateError(
         `Error deleting entity at path ${filePath}: ${(reason as Error).message}`
@@ -132,7 +117,7 @@ export function createEntityPathIfItDoesNotExist(
         await mkdir(entityPath, { recursive: true });
         return true;
       },
-      () => async () => false
+      () => T.of(false)
     )
   );
 }
@@ -150,6 +135,7 @@ export function isNotEmptyObj<Obj extends AnyObject<any>>(
 
 export function logErrors(errors: AggregateError[]): IO.IO<void> {
   const errorMsgs = pipe(errors, A.map(getErrorMessagesFromAggregateErr), A.flatten);
+
   return () => {
     if (A.isEmpty(errorMsgs)) return;
 
@@ -159,21 +145,18 @@ export function logErrors(errors: AggregateError[]): IO.IO<void> {
       A.intercalate(S.Monoid)('\n\n')
     );
 
+    const title = `${chalk.redBright.bold('Errors')}(${chalk.red.dim(
+      errorMsgs.length
+    )})`;
+
     console.error(
       boxen(errStr, {
-        title: `${chalk.redBright.bold('Errors')}(${chalk.red.dim(
-          errorMsgs.length
-        )})`,
+        title,
         padding: 1,
         borderColor: 'red',
       })
     );
   };
-}
-
-function getErrorMessagesFromAggregateErr(aggregateErrorObj: AggregateError) {
-  const filesLens = lensProp<AggregateError, 'messages'>('messages');
-  return view(filesLens, aggregateErrorObj);
 }
 
 export function logOutput(outputMsgs: string[]): IO.IO<void> {
@@ -197,7 +180,7 @@ export function logOutput(outputMsgs: string[]): IO.IO<void> {
 }
 
 type FsTask = (sourcePath: string, destinationPath: string) => Promise<void>;
-function withOverride(fn: FsTask): FsTask {
+function withDeleteFirst(fn: FsTask): FsTask {
   return async (sourcePath: string, destinationPath: string) => {
     try {
       await unlink(destinationPath);
@@ -209,8 +192,8 @@ function withOverride(fn: FsTask): FsTask {
   };
 }
 
-export const symlinkWithOverride = withOverride(symlink);
-export const hardlinkWithOverride = withOverride(link);
+export const symlinkWithDeleteFirst = withDeleteFirst(symlink);
+export const hardlinkWithDeleteFirst = withDeleteFirst(link);
 
 export function getAllDirNamesAtFolderPath(folderPath: string) {
   return TE.tryCatch(
