@@ -2,6 +2,10 @@
 
 echo "Creating test data directory for learning tests..."
 
+echo "For fs-extra..."
+mkdir -p "$DATA_DIR/learning/fs-extra/sample"
+echo "Done!"
+
 echo "For globby..."
 mkdir -p "$DATA_DIR/learning/globby"
 touch $DATA_DIR/learning/globby/{sample.ts,cat.txt,sample.rs,test.js,destinations.json}
