@@ -59,7 +59,7 @@ function transformAConfigGrpNameIntoAConfigGrpObj(configGrpName: string) {
   );
 }
 
-function generateAbsolutePathToConfigGrpDir(configGrpName: string) {
+export function generateAbsolutePathToConfigGrpDir(configGrpName: string) {
   return pipe(
     configGrpName,
     generateConfigGrpNamePathWithShellVars,

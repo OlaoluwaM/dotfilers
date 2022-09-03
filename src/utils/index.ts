@@ -9,16 +9,16 @@ import boxen from 'boxen';
 import { pipe } from 'fp-ts/lib/function';
 import { MonoidAll } from 'fp-ts/lib/boolean';
 import { filter as recordFilter } from 'fp-ts/lib/Record';
+import { not, isEmpty, slice } from 'ramda';
 import { chalk, fs as fsExtra, globby } from 'zx';
 import { AnyObject, Primitive, RawFile } from '@types';
 import { CONFIG_GRP_DEST_MAP_FILE_NAME } from '../constants';
+import { mkdir, unlink, link, symlink, readdir } from 'fs/promises';
 import {
   AggregateError,
-  getErrorMessagesFromAggregateErr,
   newAggregateError,
+  getErrorMessagesFromAggregateErr,
 } from './AggregateError';
-import { not, isEmpty, slice, lensProp, view } from 'ramda';
-import { mkdir, unlink, link, symlink, readdir } from 'fs/promises';
 
 export function getCLIArguments(startingInd: number) {
   return slice(startingInd, Infinity)(process.argv);
@@ -192,8 +192,8 @@ function withDeleteFirst(fn: FsTask): FsTask {
   };
 }
 
-export const symlinkWithDeleteFirst = withDeleteFirst(symlink);
-export const hardlinkWithDeleteFirst = withDeleteFirst(link);
+export const deleteThenSymlink = withDeleteFirst(symlink);
+export const deleteThenHardlink = withDeleteFirst(link);
 
 export function getAllDirNamesAtFolderPath(folderPath: string) {
   return TE.tryCatch(
@@ -224,4 +224,10 @@ export function transformNonStringPrimitivesToStrings(
 ) {
   if (typeof nonStringPrimitives === 'string') return nonStringPrimitives;
   return '';
+}
+
+export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
+  return async () => {
+    await fsExtra.ensureDir(dirPath);
+  };
 }

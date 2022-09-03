@@ -54,6 +54,11 @@ export interface AbsFilePath
 
 export interface CmdResponse<T> {
   errors: AggregateError[] | string[];
+  warnings?: string[];
   output: string[];
   forTest: T; // NOTE: This return is for testing purposes only
+}
+
+export interface Cmd<RT> {
+  (args: string[], cliOptions: string[]): Promise<CmdResponse<RT>>;
 }

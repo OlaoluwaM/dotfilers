@@ -17,8 +17,8 @@ import {
   default as createConfigGrps,
 } from '@app/configGrpOps';
 import {
-  symlinkWithDeleteFirst,
-  hardlinkWithDeleteFirst,
+  deleteThenSymlink,
+  deleteThenHardlink,
   createEntityPathIfItDoesNotExist,
 } from '../utils/index';
 import {
@@ -159,10 +159,10 @@ function createChosenLinkOperationFn(linkOperationType: LinkCmdOperationType) {
               match(linkOperationType)
                 .with('copy', () => copyFile(pathToSourceEntity, destinationPath))
                 .with('hardlink', () =>
-                  hardlinkWithDeleteFirst(pathToSourceEntity, destinationPath)
+                  deleteThenHardlink(pathToSourceEntity, destinationPath)
                 )
                 .with('symlink', () =>
-                  symlinkWithDeleteFirst(pathToSourceEntity, destinationPath)
+                  deleteThenSymlink(pathToSourceEntity, destinationPath)
                 )
                 .exhaustive()
           )
