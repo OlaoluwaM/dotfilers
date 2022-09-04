@@ -8,11 +8,14 @@
     "hardlinked",
     "hardlinking",
     "hardlinks",
+    "mcfly",
     "navi",
     "neovim",
+    "ohmyzsh",
     "postbuild",
     "RNEA",
     "spicetify",
+    "tilix",
     "webcompat"
   ],
   "jest.autoRun": "off"

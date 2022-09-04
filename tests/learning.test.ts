@@ -43,7 +43,7 @@ describe('Learning tests to verify behavior of fs-extra package', () => {
     ['does not exist', 'tmp'],
   ])(
     'To ascertain assumptions about the behavior of the ensureDir method when a dir %s',
-    async (_, mockDir) => {
+    async (testDescription, mockDir) => {
       // Arrange
       const testPath = `${TEST_DATA_DIR_PREFIX}/learning/fs-extra/${mockDir}`;
 
@@ -62,7 +62,10 @@ describe('Learning tests to verify behavior of fs-extra package', () => {
 
       // Assert
       expect(doesDirExist).toBeTruthy();
-      expect([procOutput, procErr]).toEqual([undefined, undefined]);
+
+      if (testDescription.includes('does not')) {
+        expect([procOutput, procErr]).toEqual([testPath, undefined]);
+      } else expect([procOutput, procErr]).toEqual([undefined, undefined]);
     }
   );
 });

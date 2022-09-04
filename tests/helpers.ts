@@ -1,17 +1,19 @@
 import * as A from 'fp-ts/lib/Array';
 import * as O from 'fp-ts/lib/Option';
+import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
+import * as Eq from 'fp-ts/lib/Eq';
 
-import { flow, pipe } from 'fp-ts/lib/function';
+import { id } from '@utils/index';
+import { not } from 'fp-ts/lib/Predicate';
 import { concatAll } from 'fp-ts/lib/Monoid';
-import { ConfigGroup, ConfigGroups, File } from '@types';
+import { MonoidAll } from 'fp-ts/lib/boolean';
+import { flow, pipe } from 'fp-ts/lib/function';
 import { stat, lstat } from 'fs/promises';
 import { fs as fsExtra } from 'zx';
-import { MonoidAll, MonoidAny } from 'fp-ts/lib/boolean';
-import { id } from '@utils/index';
+import { ConfigGroups, File } from '@types';
 import { compose, lensProp, view } from 'ramda';
 import { getFilesFromConfigGrp, isNotIgnored } from '@app/configGrpOps';
-import { not } from 'fp-ts/lib/Predicate';
 
 export async function isSymlink(filePath: string) {
   try {
@@ -85,3 +87,7 @@ const getDestinationPathsOfIgnoredFileObjs = flow(
 export const manualFail = (v: any) => {
   throw new Error(`Manual fail: ${v}`);
 };
+
+export const defaultDestRecordEq = Eq.struct({
+  '!': S.Eq,
+});

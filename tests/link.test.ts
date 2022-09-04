@@ -409,7 +409,7 @@ describe('Tests for the happy path', () => {
 describe('Tests for everything but the happy path', () => {
   const INVALID_MOCK_CONFIG_GRP_NAMES = ['node', 'spicetify', 'notion', 'cava'];
 
-  test('Should check that no operation is performed if config groups do not exist', async () => {
+  test('Should check that the link command performs no operation if the specified config groups do not exist', async () => {
     // Arrange
     // Act
     const {
@@ -429,7 +429,7 @@ describe('Tests for everything but the happy path', () => {
     ['invalid', INVALID_MOCK_CONFIG_GRP_NAMES],
     ['valid', VALID_MOCK_CONFIG_GRP_NAMES],
   ])(
-    'Should check that link command fails gracefully if the necessary environment variables were not set and we were to supply %s config group names',
+    'Should check that the link command fails gracefully if the necessary environment variables were not set and we were to supply %s config group names',
     async (_, mockConfigGrpNames) => {
       // Arrange
       const PREV_DOTFILES_ENV_VAR_VALUE = process.env.DOTFILES;
@@ -454,7 +454,7 @@ describe('Tests for everything but the happy path', () => {
     }
   );
 
-  test('Should ensure that link command exits gracefully should we decline to operate on all config groups', async () => {
+  test('Should ensure that the link command exits gracefully should we decline to operate on all config groups', async () => {
     // Arrange
     prompts.inject([false]);
 

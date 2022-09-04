@@ -8,12 +8,16 @@ import path from 'path';
 import { chalk } from 'zx/.';
 import { exitCli } from '@app/helpers';
 import { match, P } from 'ts-pattern';
-import { ExitCodes } from 'src/constants';
+import { writeFile } from 'fs/promises';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { CmdResponse } from '@types';
 import { newAggregateError } from '@utils/AggregateError';
-import { generateAbsolutePathToConfigGrpDir } from '@app/configGrpOps';
 import { createDirIfItDoesNotExist, doesPathExist } from '@utils/index';
+import { CONFIG_GRP_DEST_RECORD_FILE_NAME, ExitCodes } from '../constants';
+import {
+  DEFAULT_DEST_RECORD_FILE_CONTENTS,
+  generateAbsolutePathToConfigGrpDir,
+} from '@app/configGrpOps';
 
 export default async function main(configGrpNames: string[] | [], _: string[] = []) {
   const fatalErrMsg = chalk.red.bold(
@@ -74,6 +78,19 @@ function generateConfigGroupDirForNonExistingOnes(absPath: string) {
     TE.swap,
     TE.mapLeft(() => `${absPath} already exists. Skipping...`),
     TE.chain(flow(() => absPath, createDirIfItDoesNotExist, TE.fromTask)),
+    TE.chainFirstTaskK(() => createDefaultDestinationRecordFile(absPath)),
     TE.map(() => `${path.basename(absPath)} config group created (${absPath})`)
   ) as TE.TaskEither<string, string>;
+}
+
+function createDefaultDestinationRecordFile(configGrpDirPath: string) {
+  return async () => {
+    const fileName = `${configGrpDirPath}/${CONFIG_GRP_DEST_RECORD_FILE_NAME}`;
+
+    return await writeFile(
+      fileName,
+      JSON.stringify(DEFAULT_DEST_RECORD_FILE_CONTENTS),
+      'utf-8'
+    );
+  };
 }

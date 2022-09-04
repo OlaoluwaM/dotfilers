@@ -6,7 +6,7 @@ export const ALL_FILES_CHAR = '*';
 
 export const EXCLUDE_KEY = '!' as const;
 
-export const CONFIG_GRP_DEST_MAP_FILE_NAME = 'destinations.json' as const;
+export const CONFIG_GRP_DEST_RECORD_FILE_NAME = 'destinations.json' as const;
 
 export const NOT_FOUND = '$NOT_FOUND';
 

@@ -12,7 +12,7 @@ import { filter as recordFilter } from 'fp-ts/lib/Record';
 import { not, isEmpty, slice } from 'ramda';
 import { chalk, fs as fsExtra, globby } from 'zx';
 import { AnyObject, Primitive, RawFile } from '@types';
-import { CONFIG_GRP_DEST_MAP_FILE_NAME } from '../constants';
+import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../constants';
 import { mkdir, unlink, link, symlink, readdir } from 'fs/promises';
 import {
   AggregateError,
@@ -54,7 +54,7 @@ export function doesPathExist(
 export function getAllFilesFromDirectory(dirPath: string): T.Task<RawFile[]> {
   return async () =>
     (await globby('**/*', {
-      ignore: [CONFIG_GRP_DEST_MAP_FILE_NAME],
+      ignore: [CONFIG_GRP_DEST_RECORD_FILE_NAME],
       onlyFiles: true,
       cwd: dirPath,
       absolute: true,
