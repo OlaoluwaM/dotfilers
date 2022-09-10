@@ -4,6 +4,8 @@ import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
 import * as Eq from 'fp-ts/lib/Eq';
 
+import path from 'path';
+
 import { id } from '@utils/index';
 import { not } from 'fp-ts/lib/Predicate';
 import { concatAll } from 'fp-ts/lib/Monoid';
@@ -11,11 +13,18 @@ import { MonoidAll } from 'fp-ts/lib/boolean';
 import { flow, pipe } from 'fp-ts/lib/function';
 import { stat, lstat } from 'fs/promises';
 import { fs as fsExtra } from 'zx';
-import { ConfigGroups, File } from '@types';
 import { compose, lensProp, view } from 'ramda';
+import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants';
 import { getFilesFromConfigGrp, isNotIgnored } from '@app/configGrpOps';
+import {
+  File,
+  SourcePath,
+  ConfigGroups,
+  DestinationPath,
+  DestinationRecord,
+} from '@types';
 
-export async function isSymlink(filePath: string) {
+export async function isSymlink(filePath: DestinationPath) {
   try {
     const fileStat = await lstat(filePath);
 
@@ -26,8 +35,8 @@ export async function isSymlink(filePath: string) {
 }
 
 export async function isHardlink(
-  originalFilePath: string,
-  potentialHardlinkFilePath: string
+  originalFilePath: SourcePath,
+  potentialHardlinkFilePath: DestinationPath
 ) {
   try {
     const fileStats = await Promise.all(
@@ -43,13 +52,12 @@ export async function isHardlink(
 }
 
 export async function doesPathExist(pathToEntity: string) {
-  const pathExists = await fsExtra.pathExists(pathToEntity);
-  return pathExists;
+  return await fsExtra.pathExists(pathToEntity);
 }
 
 export const checkIfAllPathsAreValid = flow(
-  id<string[]>,
-  A.map(destinationPath => () => doesPathExist(destinationPath as string)),
+  id<DestinationPath[]>,
+  A.map(destinationPath => () => doesPathExist(destinationPath)),
   T.sequenceArray,
   T.map(concatAll(MonoidAll))
 );
@@ -91,3 +99,14 @@ export const manualFail = (v: any) => {
 export const defaultDestRecordEq = Eq.struct({
   '!': S.Eq,
 });
+
+export const readRawDestinationRecordFile = async (
+  configGrpName: string
+): Promise<DestinationRecord> =>
+  await fsExtra.readJSON(
+    path.join(
+      process.env.DOTFILES ?? process.env.DOTS!,
+      configGrpName,
+      CONFIG_GRP_DEST_RECORD_FILE_NAME
+    )
+  );

@@ -1,3 +1,4 @@
+import * as d from 'io-ts/lib/Decoder';
 import * as A from 'fp-ts/lib/Array';
 import * as E from 'fp-ts/lib/Either';
 import * as R from 'fp-ts/lib/Record';
@@ -5,40 +6,52 @@ import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
 import * as RA from 'fp-ts/lib/ReadonlyArray';
 import * as TE from 'fp-ts/lib/TaskEither';
+import * as Sep from 'fp-ts/lib/Separated';
 import * as RNEA from 'fp-ts/lib/ReadonlyNonEmptyArray';
 
+import path from 'path';
+import isGlob from 'is-glob';
+import micromatch from 'micromatch';
+
 import { not } from 'fp-ts/lib/Predicate';
+import { match, P } from 'ts-pattern';
+import { MonoidAny } from 'fp-ts/lib/boolean';
 import { pipe } from 'fp-ts/lib/function';
-import { AbsFilePathDecoder } from './decoders';
+import { DestinationPathDecoder } from './decoders';
+import { getAllFilesFromDirectory } from './helpers';
 import { newAggregateError, addError } from '@utils/AggregateError';
 import { compose, lensProp, omit, pick, view } from 'ramda';
 import {
   isValidShellExpansion,
   expandShellVariablesInString,
-  resolvePathToDestinationFile,
-} from './helpers';
-import {
-  EXCLUDE_KEY,
-  ALL_FILES_CHAR,
-  CONFIG_GRP_DEST_MAP_FILE_NAME,
-  SHELL_VARS_TO_CONFIG_GRP_DIRS,
-  SHELL_VARS_TO_CONFIG_GRP_DIRS_STR,
-} from '../constants';
+} from '@lib/shellVarStrExpander';
 import {
   readJson,
   doesPathExist,
-  getAllFilesFromDirectory,
   getOnlyValueFromEntriesArr,
-  transformNonStringPrimitivesToStrings,
+  removeLeadingPathSeparator,
 } from '@utils/index';
+import {
+  NOT_FOUND,
+  EXCLUDE_KEY,
+  ALL_FILES_CHAR,
+  SHELL_VARS_TO_CONFIG_GRP_DIRS,
+  CONFIG_GRP_DEST_RECORD_FILE_NAME,
+  SHELL_VARS_TO_CONFIG_GRP_DIRS_STR,
+} from '../constants';
 import {
   File,
   Files,
   RawFile,
-  ConfigGroup,
+  AnyObject,
+  SourcePath,
   FileRecord,
+  ConfigGroup,
+  DestinationPath,
+  toDestinationPath,
   DestinationRecord,
-  DestinationRecordWithoutIgnoreInfo,
+  DestinationRecordValue,
+  FixedDestinationRecordKeys,
 } from '@types';
 
 export default function createConfigGrps(configGrpNames: string[]) {
@@ -48,7 +61,8 @@ export default function createConfigGrps(configGrpNames: string[]) {
   );
 }
 
-function transformAConfigGrpNameIntoAConfigGrpObj(configGrpName: string) {
+type ConfigGrpName = string;
+function transformAConfigGrpNameIntoAConfigGrpObj(configGrpName: ConfigGrpName) {
   return pipe(
     configGrpName,
     generateAbsolutePathToConfigGrpDir,
@@ -59,23 +73,28 @@ function transformAConfigGrpNameIntoAConfigGrpObj(configGrpName: string) {
   );
 }
 
-export function generateAbsolutePathToConfigGrpDir(configGrpName: string) {
+export function generateAbsolutePathToConfigGrpDir(configGrpName: ConfigGrpName) {
+  const generateConfigGrpNameAbsPath = compose(
+    expandedPath => path.join(expandedPath, configGrpName),
+    expandShellVariablesInString
+  );
+
   return pipe(
-    configGrpName,
-    generateConfigGrpNamePathWithShellVars,
-    RNEA.map(expandShellVariablesInString),
+    SHELL_VARS_TO_CONFIG_GRP_DIRS,
+    RNEA.map(generateConfigGrpNameAbsPath),
     RA.filter(not(isValidShellExpansion)),
     RA.head
   );
 }
 
-function handleConfigGrpDirPathValidityErr(configGrpName: string) {
+function handleConfigGrpDirPathValidityErr(configGrpName: ConfigGrpName) {
   return addError(
     `It looks like the '${configGrpName}' config group does not exist. Is the required environment variable (${SHELL_VARS_TO_CONFIG_GRP_DIRS_STR}) set?`
   );
 }
 
-function generateConfigGrp(configGrpPath: string) {
+type ConfigGrpPath = string;
+function generateConfigGrp(configGrpPath: ConfigGrpPath) {
   return pipe(
     generatePartialConfigGrp(configGrpPath),
     includeDestinationRecord(configGrpPath),
@@ -85,11 +104,10 @@ function generateConfigGrp(configGrpPath: string) {
 
 type PartialConfigGrp = Omit<ConfigGroup, 'destinationRecord'>;
 type PartialConfigGrpObjCreator = TE.TaskEither<never, PartialConfigGrp>;
-
-function generatePartialConfigGrp(configGrpPath: string) {
+function generatePartialConfigGrp(configGrpPath: ConfigGrpPath) {
   const getNormalizedFilesFromConfigGrpPathDir = pipe(
     getAllFilesFromDirectory(configGrpPath),
-    T.map(A.map(fromRawFileToFile))
+    T.map(A.map(fromRawFileToFile(configGrpPath)))
   );
 
   return pipe(
@@ -106,9 +124,17 @@ function generatePartialConfigGrp(configGrpPath: string) {
   ) as PartialConfigGrpObjCreator;
 }
 
-function fromRawFileToFile(curr: RawFile) {
-  const updatedFileObj = R.deleteAt('dirent')({ ...curr }) as File;
-  return updatedFileObj;
+function fromRawFileToFile(configGrpPath: ConfigGrpPath) {
+  return (curr: RawFile) => {
+    const updatedFileObj = R.deleteAt('dirent')({ ...curr }) as File;
+    updatedFileObj.name = pipe(
+      updatedFileObj.path,
+      S.replace(configGrpPath, ''),
+      removeLeadingPathSeparator
+    );
+
+    return updatedFileObj;
+  };
 }
 
 function fromFileArrToFileRecord(initialFileRecord: FileRecord, currentFile: File) {
@@ -116,18 +142,104 @@ function fromFileArrToFileRecord(initialFileRecord: FileRecord, currentFile: Fil
   return initialFileRecord;
 }
 
-function includeDestinationRecord(configGrpPath: string) {
+type RawDestinationRecord = AnyObject;
+function includeDestinationRecord(configGrpPath: ConfigGrpPath) {
   return (partialConfigGrpObjCreator: PartialConfigGrpObjCreator) =>
     pipe(
-      readJson<DestinationRecord>(
-        `${configGrpPath}/${CONFIG_GRP_DEST_MAP_FILE_NAME}`
+      readJson<RawDestinationRecord>(
+        path.join(configGrpPath, CONFIG_GRP_DEST_RECORD_FILE_NAME)
       ),
-      TE.map(parseDestinationRecord),
+      TE.map(
+        compose(
+          expandDestinationRecordFileNameKeysToAbsPaths(configGrpPath),
+          parseRawDestinationRecord
+        )
+      ),
       TE.chainW(
         addDestinationRecordToPartialConfigGroup(partialConfigGrpObjCreator)
       ),
       TE.mapLeft(handleDestinationRecordParseError(configGrpPath))
     );
+}
+
+function parseRawDestinationRecord(rawDestinationRecord: RawDestinationRecord) {
+  return pipe(
+    rawDestinationRecord,
+    decodeRawDestinationRecord,
+    fillInDefaultValuesInPartialDestinationRecord
+  );
+}
+
+function decodeRawDestinationRecord(rawDestinationRecord: RawDestinationRecord) {
+  const ExcludeKeyDecoder = d.union(d.literal(ALL_FILES_CHAR), d.array(d.string));
+
+  const rawDestinationRecordDecodeResult = pipe(
+    rawDestinationRecord,
+    R.mapWithIndex((key, value) =>
+      match(key)
+        .with(EXCLUDE_KEY, () => ExcludeKeyDecoder.decode(value))
+        .with(P.union(ALL_FILES_CHAR, P.string), () =>
+          DestinationPathDecoder.decode(value)
+        )
+        .exhaustive()
+    )
+  ) as Record<string, E.Either<d.DecodeError, DestinationRecordValue>>;
+
+  return pipe(rawDestinationRecordDecodeResult, R.separate, Sep.right);
+}
+
+function fillInDefaultValuesInPartialDestinationRecord(
+  partialDestinationRecord: Record<string, DestinationRecordValue>
+) {
+  const HOME_DIR = expandShellVariablesInString('$HOME');
+
+  const DEFAULT_DESTINATION_RECORD = {
+    [EXCLUDE_KEY]: [] as string[],
+    [ALL_FILES_CHAR]: toDestinationPath(HOME_DIR),
+  } as Pick<DestinationRecord, FixedDestinationRecordKeys>;
+
+  return {
+    ...DEFAULT_DESTINATION_RECORD,
+    ...partialDestinationRecord,
+  } as DestinationRecord;
+}
+
+function expandDestinationRecordFileNameKeysToAbsPaths(
+  configGrpPath: ConfigGrpPath
+) {
+  return (destinationRecord: DestinationRecord) => {
+    const destinationRecordWithOnlyFileNameKeys = omit(
+      [EXCLUDE_KEY, ALL_FILES_CHAR],
+      destinationRecord
+    );
+    const destinationRecordWithoutFileNameKeys = pick(
+      [EXCLUDE_KEY, ALL_FILES_CHAR],
+      destinationRecord
+    ) as Pick<DestinationRecord, FixedDestinationRecordKeys>;
+
+    const expandNonGlobKeys = expandNonGlobDestinationRecordKeys(configGrpPath);
+    const destinationRecordWithExpandedPathValues = pipe(
+      destinationRecordWithOnlyFileNameKeys,
+      R.toEntries,
+      A.map(
+        ([fileName, destinationPath]) =>
+          [expandNonGlobKeys(fileName), destinationPath] as [string, DestinationPath]
+      ),
+      R.fromEntries
+    );
+
+    return {
+      ...destinationRecordWithExpandedPathValues,
+      ...destinationRecordWithoutFileNameKeys,
+    } as DestinationRecord;
+  };
+}
+
+function expandNonGlobDestinationRecordKeys(configGrpPath: ConfigGrpPath) {
+  return (destinationRecordKey: string) => {
+    if (isGlob(destinationRecordKey)) return destinationRecordKey;
+    return path.join(configGrpPath, destinationRecordKey);
+  };
 }
 
 function addDestinationRecordToPartialConfigGroup(
@@ -145,63 +257,11 @@ function addDestinationRecordToPartialConfigGroup(
 
 function handleDestinationRecordParseError(configGrpPath: string) {
   return addError(
-    `Error, could not parse the ${CONFIG_GRP_DEST_MAP_FILE_NAME} file at the ${configGrpPath} path`
+    `Error, could not parse the ${CONFIG_GRP_DEST_RECORD_FILE_NAME} file at the ${configGrpPath} path`
   );
 }
 
-function parseDestinationRecord(rawDestinationRecord: DestinationRecord) {
-  return pipe(
-    rawDestinationRecord,
-    generateParsedDestinationRecord(
-      compose(
-        decodeDestinationRecordEntries,
-        attemptToExpandDestinationRecordEntryValues()
-      )
-    )
-  );
-}
-
-type DestinationRecordOperatorFn = (
-  destinationRecord: DestinationRecordWithoutIgnoreInfo
-) => DestinationRecordWithoutIgnoreInfo;
-
-function generateParsedDestinationRecord(operatorFn: DestinationRecordOperatorFn) {
-  return (originalDestinationRecord: DestinationRecord) => {
-    const destinationRecordWithoutIgnoreInfo = omit(
-      [EXCLUDE_KEY],
-      originalDestinationRecord
-    ) as DestinationRecordWithoutIgnoreInfo;
-
-    const destinationRecordIgnoreInfo = pick(
-      [EXCLUDE_KEY],
-      originalDestinationRecord
-    ) as Pick<DestinationRecord, typeof EXCLUDE_KEY>;
-
-    const finalDestinationRecord = operatorFn(destinationRecordWithoutIgnoreInfo);
-
-    return {
-      ...finalDestinationRecord,
-      ...destinationRecordIgnoreInfo,
-    } as DestinationRecord;
-  };
-}
-
-function attemptToExpandDestinationRecordEntryValues() {
-  return R.map(
-    compose(expandShellVariablesInString, transformNonStringPrimitivesToStrings)
-  );
-}
-
-function decodeDestinationRecordEntries(
-  destinationRecord: DestinationRecordWithoutIgnoreInfo
-): DestinationRecordWithoutIgnoreInfo {
-  return pipe(destinationRecord, R.filter(isInvalidAbsFilePath));
-}
-
-function isInvalidAbsFilePath(destinationPath: string) {
-  return E.isRight(AbsFilePathDecoder.decode(destinationPath));
-}
-
+type FileInfo = [string, SourcePath];
 function includeRequiredMetaDataInConfigGrp(configGrp: ConfigGroup) {
   const { fileRecord, destinationRecord } = configGrp;
   const configGrpOperatorFn = generateConfigGrpObjOperatorFn(destinationRecord);
@@ -213,18 +273,27 @@ function includeRequiredMetaDataInConfigGrp(configGrp: ConfigGroup) {
     determineFileDestinationPath
   );
 
-  const newFileRecordPropWithIgnoreStatusAndDestPath = R.map<File, File>(
-    fileRecordPropEntry => ({
-      ...fileRecordPropEntry,
-      ignore: determineIfFileShouldBeIgnored(fileRecordPropEntry.name),
-
-      destinationPath: pipe(
+  const newFileRecordPropWithIgnoreStatusAndDestPath = pipe(
+    fileRecord,
+    R.map<File, File>(fileRecordPropEntry => {
+      const fileInfo = [
         fileRecordPropEntry.name,
-        computeFileDestinationPath,
-        resolvePathToDestinationFile(fileRecordPropEntry.name)
-      ),
+        fileRecordPropEntry.path,
+      ] as FileInfo;
+
+      return {
+        ...fileRecordPropEntry,
+        ignore: determineIfFileShouldBeIgnored(fileInfo),
+
+        destinationPath: pipe(
+          fileInfo,
+          computeFileDestinationPath,
+          (incompleteAbsDestinationPath: DestinationPath) =>
+            path.join(incompleteAbsDestinationPath, path.basename(fileInfo[0]))
+        ) as DestinationPath,
+      };
     })
-  )(fileRecord) as ConfigGroup['fileRecord'];
+  ) as ConfigGroup['fileRecord'];
 
   return {
     ...configGrp,
@@ -235,45 +304,79 @@ function includeRequiredMetaDataInConfigGrp(configGrp: ConfigGroup) {
   };
 }
 
+type MatchingGlobPattern = string | typeof NOT_FOUND;
 function generateConfigGrpObjOperatorFn(destinationRecord: DestinationRecord) {
-  return <RT>(fn: (destinationRecord: DestinationRecord, fileName: string) => RT) =>
-    (fileName: string): RT =>
-      fn(destinationRecord, fileName);
+  return <RT>(
+    fn: (
+      destinationRecord: DestinationRecord,
+      fileInfo: FileInfo,
+      matchingGlobPatternForFileName: MatchingGlobPattern
+    ) => RT
+  ) => {
+    const fileNameGlobMatchRetriever = createGlobMatchRetriever(destinationRecord);
+
+    return (fileInfo: FileInfo): RT =>
+      fn(destinationRecord, fileInfo, fileNameGlobMatchRetriever(fileInfo[0]));
+  };
 }
 
 function determineFileIgnoreStatus(
   destinationRecord: DestinationRecord,
-  fileName: string
+  [fileName]: FileInfo,
+  matchingGlobPatternForFileName: MatchingGlobPattern
 ) {
-  const namesOfFilesToIgnore = destinationRecord?.[EXCLUDE_KEY];
+  const namesOfFilesToIgnore = destinationRecord[EXCLUDE_KEY];
+
   const ignoreAllFiles = namesOfFilesToIgnore === ALL_FILES_CHAR;
   if (ignoreAllFiles) return true;
 
-  return namesOfFilesToIgnore === undefined
-    ? false
-    : RA.elem(S.Eq)(fileName)(namesOfFilesToIgnore);
+  const globMatchPreposition =
+    matchingGlobPatternForFileName === NOT_FOUND
+      ? MonoidAny.empty
+      : RA.elem(S.Eq)(matchingGlobPatternForFileName)(namesOfFilesToIgnore);
+
+  const isFileIgnored = MonoidAny.concat(
+    RA.elem(S.Eq)(fileName)(namesOfFilesToIgnore),
+    globMatchPreposition
+  );
+
+  return isFileIgnored;
 }
 
 function determineFileDestinationPath(
   destinationRecord: DestinationRecord,
-  fileName: string
-): string {
-  const HOME_DIR = expandShellVariablesInString('$HOME');
-
+  [_, filePath]: FileInfo,
+  matchingGlobPatternForFileName: MatchingGlobPattern
+) {
   return (
-    destinationRecord[fileName] ?? destinationRecord[ALL_FILES_CHAR] ?? HOME_DIR
+    destinationRecord[filePath] ??
+    destinationRecord[matchingGlobPatternForFileName] ??
+    destinationRecord[ALL_FILES_CHAR]
   );
+}
+
+function createGlobMatchRetriever(destinationRecord: DestinationRecord) {
+  const allSpecifiedGlobPatterns = pipe(
+    destinationRecord,
+    R.filterWithIndex(potentialGlob => isGlob(potentialGlob)),
+    R.keys
+  );
+
+  return (fileName: string): MatchingGlobPattern => {
+    let matchingGlobPattern: MatchingGlobPattern = NOT_FOUND;
+
+    const onMatch = ({ glob }: { glob: string }) => {
+      matchingGlobPattern = glob;
+    };
+
+    micromatch.isMatch(fileName, allSpecifiedGlobPatterns, { onMatch });
+
+    return matchingGlobPattern;
+  };
 }
 
 function generateFilesArrFromFileRecord(fileRecord: FileRecord): Files {
   return pipe(fileRecord, R.toArray, A.map(getOnlyValueFromEntriesArr));
-}
-
-export function generateConfigGrpNamePathWithShellVars(configGrpName: string) {
-  return pipe(
-    SHELL_VARS_TO_CONFIG_GRP_DIRS,
-    RA.map(shellVar => `${shellVar}/${configGrpName}`)
-  ) as readonly [string, string];
 }
 
 export function getFilesFromConfigGrp(configGrpObj: ConfigGroup) {
@@ -284,3 +387,5 @@ export function getFilesFromConfigGrp(configGrpObj: ConfigGroup) {
 export function isNotIgnored(fileObj: File): boolean {
   return fileObj.ignore === false;
 }
+
+export const DEFAULT_DEST_RECORD_FILE_CONTENTS = { '!': '*' };

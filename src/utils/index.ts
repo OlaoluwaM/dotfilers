@@ -8,17 +8,17 @@ import boxen from 'boxen';
 
 import { pipe } from 'fp-ts/lib/function';
 import { MonoidAll } from 'fp-ts/lib/boolean';
-import { filter as recordFilter } from 'fp-ts/lib/Record';
 import { not, isEmpty, slice } from 'ramda';
-import { chalk, fs as fsExtra, globby } from 'zx';
-import { AnyObject, Primitive, RawFile } from '@types';
-import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../constants';
-import { mkdir, unlink, link, symlink, readdir } from 'fs/promises';
+import { chalk, fs as fsExtra } from 'zx';
+import { filter as recordFilter } from 'fp-ts/lib/Record';
+import { mkdir, unlink, link, symlink, readdir, copyFile } from 'fs/promises';
 import {
   AggregateError,
   newAggregateError,
   getErrorMessagesFromAggregateErr,
 } from './AggregateError';
+import { Primitive, AnyObject, SourcePath, DestinationPath } from '@types';
+import path from 'path';
 
 export function getCLIArguments(startingInd: number) {
   return slice(startingInd, Infinity)(process.argv);
@@ -49,18 +49,6 @@ export function doesPathExist(
     },
     reason => newAggregateError(reason as Error)
   );
-}
-
-export function getAllFilesFromDirectory(dirPath: string): T.Task<RawFile[]> {
-  return async () =>
-    (await globby('**/*', {
-      ignore: [CONFIG_GRP_DEST_RECORD_FILE_NAME],
-      onlyFiles: true,
-      cwd: dirPath,
-      absolute: true,
-      objectMode: true,
-      dot: true,
-    })) as unknown as RawFile[];
 }
 
 export function readJson<T>(jsonFilePath: string): TE.TaskEither<AggregateError, T> {
@@ -179,9 +167,13 @@ export function logOutput(outputMsgs: string[]): IO.IO<void> {
   };
 }
 
-type FsTask = (sourcePath: string, destinationPath: string) => Promise<void>;
+type FsTask = (
+  sourcePath: SourcePath,
+  destinationPath: DestinationPath
+) => Promise<void>;
+
 function withDeleteFirst(fn: FsTask): FsTask {
-  return async (sourcePath: string, destinationPath: string) => {
+  return async (sourcePath, destinationPath) => {
     try {
       await unlink(destinationPath);
     } catch {
@@ -194,6 +186,8 @@ function withDeleteFirst(fn: FsTask): FsTask {
 
 export const deleteThenSymlink = withDeleteFirst(symlink);
 export const deleteThenHardlink = withDeleteFirst(link);
+export const normalizedCopy = async (src: SourcePath, dest: DestinationPath) =>
+  await copyFile(src, dest);
 
 export function getAllDirNamesAtFolderPath(folderPath: string) {
   return TE.tryCatch(
@@ -230,4 +224,9 @@ export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
   return async () => {
     await fsExtra.ensureDir(dirPath);
   };
+}
+
+export function removeLeadingPathSeparator(dirPath: string) {
+  const leadingPathSeparatorRegex = new RegExp(`^${path.sep}+`);
+  return S.replace(leadingPathSeparatorRegex, '')(dirPath)
 }

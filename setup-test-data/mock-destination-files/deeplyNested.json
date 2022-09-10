@@ -1,0 +1,4 @@
+{
+  "sample.rs": "~",
+  "inner/sample/sample/sample.rs": "~/rust/sample"
+}

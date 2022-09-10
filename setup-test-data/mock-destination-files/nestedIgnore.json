@@ -1,0 +1,4 @@
+{
+  "exclude": ["inner/example.js"],
+  "all": "~/.config/for-nested-ignore"
+}

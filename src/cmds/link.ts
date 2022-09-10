@@ -3,36 +3,38 @@ import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
-import parseCliArgs from '@lib/minimal-argp';
+import parseCliArgs from '@lib/minimal-argp/index';
 
 import { pipe } from 'fp-ts/lib/function';
 import { chalk } from 'zx';
 import { match, P } from 'ts-pattern';
-import { copyFile } from 'fs/promises';
 import { ExitCodes } from '../constants';
-import { newAggregateError } from '../utils/AggregateError';
+import { newAggregateError } from '@utils/AggregateError';
 import {
   isNotIgnored,
   getFilesFromConfigGrp,
   default as createConfigGrps,
 } from '@app/configGrpOps';
 import {
+  normalizedCopy,
   deleteThenSymlink,
   deleteThenHardlink,
   createEntityPathIfItDoesNotExist,
-} from '../utils/index';
-import {
-  File,
-  CmdResponse,
-  ConfigGroups,
-  LinkCmdOperationType,
-} from '../types/index';
+} from '@utils/index';
 import {
   exitCli,
   exitCliWithCodeOnly,
   linkOperationTypeToPastTense,
   optionallyGetAllConfigGrpNamesInExistence,
 } from '@app/helpers';
+import {
+  File,
+  SourcePath,
+  CmdResponse,
+  ConfigGroups,
+  DestinationPath,
+  LinkCmdOperationType,
+} from '@types';
 
 const linkCmdCliOptionsConfig = {
   options: {
@@ -149,22 +151,24 @@ function performChosenLinkCmdOperation(
 }
 
 function createChosenLinkOperationFn(linkOperationType: LinkCmdOperationType) {
-  return (pathToSourceEntity: string, destinationPath: string) =>
+  return (pathToSourceEntity: SourcePath, destinationPath: DestinationPath) =>
     TE.tryCatch(
       async () => {
         await pipe(
           createEntityPathIfItDoesNotExist(path.dirname(destinationPath)),
+
           T.chain(
             () => () =>
               match(linkOperationType)
-                .with('copy', () => copyFile(pathToSourceEntity, destinationPath))
+                .with('copy', () =>
+                  normalizedCopy(pathToSourceEntity, destinationPath)
+                )
                 .with('hardlink', () =>
                   deleteThenHardlink(pathToSourceEntity, destinationPath)
                 )
                 .with('symlink', () =>
                   deleteThenSymlink(pathToSourceEntity, destinationPath)
-                )
-                .exhaustive()
+                ).exhaustive()
           )
         )();
 

@@ -85,7 +85,7 @@ function generateConfigGroupDirForNonExistingOnes(absPath: string) {
 
 function createDefaultDestinationRecordFile(configGrpDirPath: string) {
   return async () => {
-    const fileName = `${configGrpDirPath}/${CONFIG_GRP_DEST_RECORD_FILE_NAME}`;
+    const fileName = path.join(configGrpDirPath, CONFIG_GRP_DEST_RECORD_FILE_NAME);
 
     return await writeFile(
       fileName,

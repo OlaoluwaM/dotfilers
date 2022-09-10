@@ -1,0 +1,4 @@
+{
+  "*.js": "~/.config/node",
+  "*s": "~/.config/ss"
+}
