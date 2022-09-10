@@ -18,13 +18,14 @@ import { TEST_DATA_DIR_PREFIX } from './setup';
 import { getFilesFromConfigGrp } from '@app/configGrpOps';
 import { compose, lensProp, view } from 'ramda';
 import { getAllDirNamesAtFolderPath } from '@utils/index';
+import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
 import { describe, test, expect, beforeAll } from '@jest/globals';
+import { ConfigGroup, DestinationPath, File, SourcePath } from '@types';
 import {
-  ALL_FILES_CHAR,
   ExitCodes,
+  ALL_FILES_CHAR,
   SHELL_VARS_TO_CONFIG_GRP_DIRS,
 } from '../src/constants';
-import { ConfigGroup, DestinationPath, File, SourcePath } from '@types';
 import {
   isSymlink,
   isHardlink,
@@ -36,7 +37,6 @@ import {
   getDestinationPathsOfIgnoredFiles,
   readRawDestinationRecordFile,
 } from './helpers';
-import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
 
 const LINK_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/link`;
 const LINK_TEST_ASSERT_DIR = `${LINK_TEST_DATA_DIR}/mock-home`;
@@ -695,8 +695,6 @@ describe('Tests for the happy path', () => {
 
       const { fileRecord } = outputForTests[0];
 
-      console.log(JSON.stringify(fileRecord, null, 2));
-
       const targetFileWasNotIgnored = await pipe(
         targetFileName,
         compose(doesPathExist, fileName => fileRecord[fileName].destinationPath)
@@ -707,6 +705,12 @@ describe('Tests for the happy path', () => {
       expect(targetFileWasNotIgnored).toBeFalsy();
       expect(actualCmdOutput.length).toBe(R.size(fileRecord) - 1);
     });
+
+    test.todo('Does nesting work with globs');
+
+    test.todo('What happens if a nested key starts with a leading slash');
+
+    test.todo('Can I work with a nested config group like a normal config group');
   });
 });
 
@@ -768,4 +772,7 @@ describe('Tests for everything but the happy path', () => {
     // Assert
     expect(process.exit).toHaveBeenCalledWith(ExitCodes.OK);
   });
+
+  // NOTE: They will overwrite each other
+  test.skip('What happens when nested and surface level files with the same name have the same destination path', () => {});
 });

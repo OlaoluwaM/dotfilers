@@ -35,7 +35,6 @@ describe('Learning tests to verify behavior of globby package', () => {
     });
 
     // Assert
-    console.log(JSON.stringify(discoveredFiles, null, 2));
     expect(discoveredFiles).toHaveLength(numberOfNonTsFiles.length - 1);
   });
 });

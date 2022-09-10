@@ -10,7 +10,8 @@ interface ShellVariableMap {
   [variableName: string]: string | undefined;
 }
 
-const NOT_FOUND = '$NOT_FOUND';
+// NOTE: Exposed for testing purposes ONLY!!
+export const NOT_FOUND = '$NOT_FOUND';
 
 export function expandShellVariablesInString(strWithShellVars: string) {
   return replaceShellVarsInString(process.env)(strWithShellVars);

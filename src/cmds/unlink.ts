@@ -9,7 +9,7 @@ import { ExitCodes } from '../constants';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { removeEntityAt } from '../utils/index';
 import { lensProp, view } from 'ramda';
-import { File, ConfigGroups, CmdResponse } from '../types/index';
+import { DestinationPath, File, ConfigGroups, CmdResponse } from '@types';
 import {
   isNotIgnored,
   getFilesFromConfigGrp,
@@ -41,7 +41,9 @@ export default async function main(passedArguments: string[]) {
   return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
-async function unlinkCmd(configGrpNames: string[]): Promise<CmdResponse<string[]>> {
+async function unlinkCmd(
+  configGrpNames: string[]
+): Promise<CmdResponse<DestinationPath[]>> {
   const configGrpsWithErrors = await createConfigGrpObjs(configGrpNames)();
   const { left: configGrpCreationErrs, right: configGrps } = configGrpsWithErrors;
 

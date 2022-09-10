@@ -91,6 +91,8 @@ describe('Tests for the happy path', () => {
       await removeDirs(nonExistingConfigGrpNames);
     }
   );
+
+  test.todo('Can I create a nested config group?');
 });
 
 describe('Tests for everything but the happy path', () => {

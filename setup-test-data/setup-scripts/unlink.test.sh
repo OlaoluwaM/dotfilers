@@ -13,7 +13,7 @@ for CONFIG_GRP_PATH in "${MOCK_CONFIG_GRP_PATHS[@]}"; do
   CONFIG_GRP_NAME=$(echo "$CONFIG_GRP_PATH" | awk -F "/" '{ print $NF }')
 
   mkdir -p "$CONFIG_GRP_PATH"
-  ln -sf "$rootDir/mock-destination-files/${CONFIG_GRP_NAME}.destinations.json" "$CONFIG_GRP_PATH/destinations.json"
+  ln -sf "$rootDir/mock-destination-files/${CONFIG_GRP_NAME}.json" "$CONFIG_GRP_PATH/destinations.json"
 done
 
 touch $TARGET_DIR/mock-dots/npm/{.npmrc,npm-config.json}
