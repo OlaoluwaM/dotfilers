@@ -13,6 +13,7 @@ import { describe, test, expect, beforeAll } from '@jest/globals';
 import {
   checkIfAllPathsAreValid,
   getDestinationPathsOfIgnoredFiles,
+  getDestinationPathsFromConfigGroups,
 } from './helpers';
 
 const UNLINK_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/unlink`;
@@ -51,6 +52,7 @@ describe('Tests for the happy path', () => {
       // Assert
       expect(errors).toEqual([]);
       expect(areAllDestinationFilesPresentAtTheirDestinationPaths).toBeFalsy();
+
       expect(cmdOutput.length).toBeGreaterThanOrEqual(
         VALID_MOCK_CONFIG_GRP_NAMES.length
       );
@@ -70,7 +72,9 @@ describe('Tests for the happy path', () => {
 
       prompts.inject([true, true]);
 
-      await linkCmd([], mockOptions);
+      const { forTest: configGroups } = await linkCmd([], mockOptions);
+      const linkCmdDestinationPaths =
+        getDestinationPathsFromConfigGroups(configGroups);
 
       // Act
       const {
@@ -84,7 +88,9 @@ describe('Tests for the happy path', () => {
 
       // Assert
       expect(errors).toEqual([]);
+      expect(linkCmdDestinationPaths).toEqual(destinationPaths);
       expect(areAllDestinationFilesPresentAtTheirDestinationPaths).toBeFalsy();
+
       expect(cmdOutput.length).toBeGreaterThanOrEqual(
         VALID_MOCK_CONFIG_GRP_NAMES.length
       );
@@ -103,13 +109,13 @@ describe('Tests for the happy path', () => {
     'Should ensure that the unlink command can delete %s config files from config groups even when some files are being ignored',
     async (_, mockLinkCmdCliOptions) => {
       // Arrange
-      const mockConfigGrpNames = VALID_MOCK_CONFIG_GRP_NAMES.concat([
+      const mockConfigGroupNames = VALID_MOCK_CONFIG_GRP_NAMES.concat([
         'withAllIgnored',
         'withSomeIgnored',
       ]);
 
-      const { forTest: configGrps } = await linkCmd(
-        mockConfigGrpNames,
+      const { forTest: configGroups } = await linkCmd(
+        mockConfigGroupNames,
         mockLinkCmdCliOptions
       );
 
@@ -118,18 +124,18 @@ describe('Tests for the happy path', () => {
         errors,
         output: cmdOutput,
         forTest: destinationPathsThatWereOperatedOn,
-      } = await unlinkCmd(mockConfigGrpNames);
+      } = await unlinkCmd(mockConfigGroupNames);
 
       const destinationPathsOfIgnoredFilesOnly =
-        getDestinationPathsOfIgnoredFiles(configGrps);
+        getDestinationPathsOfIgnoredFiles(configGroups);
 
       const areAllDestinationFilesPresentAtTheirDestinationPaths =
         await checkIfAllPathsAreValid(destinationPathsThatWereOperatedOn)();
 
       const areIgnoredFilesPresentInListOfOperatedOnDestinationPaths = pipe(
         destinationPathsOfIgnoredFilesOnly,
-        A.map(destinationPath =>
-          A.elem(S.Eq)(destinationPath)(destinationPathsThatWereOperatedOn)
+        A.map(destinationPathOfIgnoredFile =>
+          A.elem(S.Eq)(destinationPathOfIgnoredFile)(destinationPathsThatWereOperatedOn)
         ),
         concatAll(MonoidAny)
       );
@@ -138,6 +144,7 @@ describe('Tests for the happy path', () => {
       expect(errors).toEqual([]);
       expect(areAllDestinationFilesPresentAtTheirDestinationPaths).toBeFalsy();
       expect(areIgnoredFilesPresentInListOfOperatedOnDestinationPaths).toBeFalsy();
+
       expect(cmdOutput.length).toBeGreaterThanOrEqual(
         destinationPathsThatWereOperatedOn.length
       );

@@ -6,20 +6,19 @@ import * as Eq from 'fp-ts/lib/Eq';
 
 import path from 'path';
 
-import { id } from '@utils/index';
 import { not } from 'fp-ts/lib/Predicate';
 import { concatAll } from 'fp-ts/lib/Monoid';
 import { MonoidAll } from 'fp-ts/lib/boolean';
-import { flow, pipe } from 'fp-ts/lib/function';
 import { stat, lstat } from 'fs/promises';
 import { fs as fsExtra } from 'zx';
+import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { compose, lensProp, view } from 'ramda';
 import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants';
-import { getFilesFromConfigGrp, isNotIgnored } from '@app/configGrpOps';
+import { getFilesFromConfigGroup, isNotIgnored } from '@app/configGroup';
 import {
   File,
   SourcePath,
-  ConfigGroups,
+  ConfigGroup,
   DestinationPath,
   DestinationRecord,
 } from '@types';
@@ -56,39 +55,54 @@ export async function doesPathExist(pathToEntity: string) {
 }
 
 export const checkIfAllPathsAreValid = flow(
-  id<DestinationPath[]>,
-  A.map(destinationPath => () => doesPathExist(destinationPath)),
-  T.sequenceArray,
+  identity<DestinationPath[]>,
+  T.traverseArray(destinationPath => () => doesPathExist(destinationPath)),
   T.map(concatAll(MonoidAll))
 );
 
-export const getDestinationPathsFromConfigGrp = flow(
-  id<ConfigGroups>,
-  A.map(compose(A.map(getDestinationPathFromFileObj), getFilesFromConfigGrp)),
-  A.flatten
+export const getDestinationPathsFromConfigGroups = flow(
+  identity<ConfigGroup[]>,
+  A.chain(compose(A.map(getDestinationPathFromFileObj), getFilesFromConfigGroup))
 );
 
-export function getDestinationPathFromFileObj(configGrpFileObj: File) {
+export function getDestinationPathFromFileObj(configGroupFileObj: File) {
   const destinationPathLens = lensProp<File, 'destinationPath'>('destinationPath');
-  return view(destinationPathLens, configGrpFileObj);
+  return view(destinationPathLens, configGroupFileObj);
 }
 
-export function getDestinationPathsOfIgnoredFiles(configGrps: ConfigGroups) {
+export function getDestinationPathsOfIgnoredFiles(configGroups: ConfigGroup[]) {
   return pipe(
-    configGrps,
-    A.map(
+    configGroups,
+    A.chain(
       compose(
         A.filterMap(getDestinationPathsOfIgnoredFileObjs),
-        getFilesFromConfigGrp
+        getFilesFromConfigGroup
       )
-    ),
-    A.flatten
+    )
+  );
+}
+
+export function getDestinationPathsOfNonIgnoredFiles(configGroups: ConfigGroup[]) {
+  return pipe(
+    configGroups,
+    A.chain(
+      compose(
+        A.filterMap(getDestinationPathsOfNonIgnoredFileObjs),
+        getFilesFromConfigGroup
+      )
+    )
   );
 }
 
 const getDestinationPathsOfIgnoredFileObjs = flow(
-  id<File>,
+  identity<File>,
   O.fromPredicate(not(isNotIgnored)),
+  O.map(getDestinationPathFromFileObj)
+);
+
+const getDestinationPathsOfNonIgnoredFileObjs = flow(
+  identity<File>,
+  O.fromPredicate(isNotIgnored),
   O.map(getDestinationPathFromFileObj)
 );
 
@@ -101,12 +115,12 @@ export const defaultDestRecordEq = Eq.struct({
 });
 
 export const readRawDestinationRecordFile = async (
-  configGrpName: string
+  configGroupName: string
 ): Promise<DestinationRecord> =>
   await fsExtra.readJSON(
     path.join(
       process.env.DOTFILES ?? process.env.DOTS!,
-      configGrpName,
+      configGroupName,
       CONFIG_GRP_DEST_RECORD_FILE_NAME
     )
   );

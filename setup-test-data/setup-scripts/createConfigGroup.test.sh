@@ -2,7 +2,7 @@
 
 TARGET_DIR="$DATA_DIR/create-config-grp"
 
-echo "Creating test data directory for testing the createConfigGrp command..."
+echo "Creating test data directory for testing the createConfigGroup command..."
 mkdir -p "$TARGET_DIR/mock-dots"
 echo "Done!"
 

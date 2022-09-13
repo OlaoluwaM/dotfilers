@@ -3,86 +3,83 @@ import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
 
-import { chalk } from 'zx';
 import { match, P } from 'ts-pattern';
 import { ExitCodes } from '../constants';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { removeEntityAt } from '../utils/index';
 import { lensProp, view } from 'ramda';
-import { DestinationPath, File, ConfigGroups, CmdResponse } from '@types';
+import { DestinationPath, File, ConfigGroup, CmdResponse } from '@types';
 import {
   isNotIgnored,
-  getFilesFromConfigGrp,
-  default as createConfigGrpObjs,
-} from '@app/configGrpOps';
+  getFilesFromConfigGroup,
+  default as createConfigGroupObjs,
+} from '@app/configGroup';
 import {
   exitCli,
   exitCliWithCodeOnly,
-  optionallyGetAllConfigGrpNamesInExistence,
+  getPathsToAllConfigGroupDirsInExistence,
 } from '@app/helpers';
 
 export default async function main(passedArguments: string[]) {
-  const configGrpNames = A.isEmpty(passedArguments)
-    ? await optionallyGetAllConfigGrpNamesInExistence()
+  const configGroupNamesOrDirPaths = A.isEmpty(passedArguments)
+    ? await getPathsToAllConfigGroupDirsInExistence()
     : passedArguments;
 
-  const fatalErrMsg = chalk.red.bold(
-    'Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables? If so, then perhaps you have no configuration groups yet.'
-  );
-
   // eslint-disable-next-line no-return-await
-  const cmdOutput = await match(configGrpNames)
+  const cmdOutput = await match(configGroupNamesOrDirPaths)
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
-    .with({ _tag: 'None' }, () => exitCli(fatalErrMsg, ExitCodes.GENERAL))
-    .with({ _tag: 'Some' }, (_, some) => unlinkCmd(some.value))
-    .with(P.array(P.string), (_, value) => unlinkCmd(value))
+    .with({ _tag: 'Left' }, (_, { left }) =>
+      exitCli(left.message, ExitCodes.GENERAL)
+    )
+    .with({ _tag: 'Right' }, (_, { right }) => unlinkCmd(right))
+    .with(P.array(P.string), (_, configGroupNames) => unlinkCmd(configGroupNames))
     .exhaustive();
 
   return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
 async function unlinkCmd(
-  configGrpNames: string[]
+  configGroupNamesOrDirPaths: string[]
 ): Promise<CmdResponse<DestinationPath[]>> {
-  const configGrpsWithErrors = await createConfigGrpObjs(configGrpNames)();
-  const { left: configGrpCreationErrs, right: configGrps } = configGrpsWithErrors;
+  const configGroupsWithErrors = await createConfigGroupObjs(configGroupNamesOrDirPaths)();
+  const { left: configGroupCreationErrs, right: configGroups } =
+    configGroupsWithErrors;
 
-  const validConfigGrpDestinationPaths =
-    getDestinationPathsForAllValidFiles(configGrps);
+  const validConfigGroupDestinationPaths =
+    getDestinationPathsForAllNonIgnoredFiles(configGroups);
 
   const deletionOperationFeedback = await pipe(
-    validConfigGrpDestinationPaths,
+    validConfigGroupDestinationPaths,
     undoOperationPerformedByLinkCmd
   )();
   const { left: deletionErrors, right: deletionOutput } = deletionOperationFeedback;
 
   return {
-    errors: [...deletionErrors, ...configGrpCreationErrs],
+    errors: [...deletionErrors, ...configGroupCreationErrs],
     output: deletionOutput,
-    forTest: validConfigGrpDestinationPaths,
+    forTest: validConfigGroupDestinationPaths,
   };
 }
 
-function getDestinationPathsForAllValidFiles(configGrps: ConfigGroups) {
+function getDestinationPathsForAllNonIgnoredFiles(configGroups: ConfigGroup[]) {
   return pipe(
-    configGrps,
-    A.map(getFilesFromConfigGrp),
-    A.flatten,
+    configGroups,
+    A.chain(getFilesFromConfigGroup),
     A.filterMap(getDestinationPathForFileObjsThatAreNotIgnored)
   );
 }
 
-function getDestinationPathForFileObjsThatAreNotIgnored(fileObj: File) {
+function getDestinationPathForFileObjsThatAreNotIgnored(configGroupFileObj: File) {
   return pipe(
-    fileObj,
+    configGroupFileObj,
     O.fromPredicate(isNotIgnored),
     O.map(getDestinationPathForFileObj)
   );
 }
 
-function getDestinationPathForFileObj(configGrpFileObj: File) {
+function getDestinationPathForFileObj(configGroupFileObj: File) {
   const destinationPathLens = lensProp<File, 'destinationPath'>('destinationPath');
-  return view(destinationPathLens, configGrpFileObj);
+  return view(destinationPathLens, configGroupFileObj);
 }
 
 function undoOperationPerformedByLinkCmd(destinationPaths: string[]) {

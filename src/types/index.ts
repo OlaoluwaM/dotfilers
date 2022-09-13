@@ -1,17 +1,19 @@
-import { Entry } from 'fast-glob';
+import { EntryInfo } from 'readdirp';
 import { AggregateError } from '@utils/AggregateError';
 import { Brand, createBrander } from '@lib/brand';
 import { NOT_FOUND, ALL_FILES_CHAR, EXCLUDE_KEY } from '../constants';
 
-export type RawFile = Omit<Entry, 'stats'>;
+export type RawFile = EntryInfo;
 
-export type File = Pick<RawFile, 'name'> & {
+export type File = {
+  sourcePath: SourcePath;
+  name: string;
+  basename: string;
   ignore: boolean;
-  path: SourcePath;
   destinationPath: DestinationPath;
 };
 
-export type Files = File[];
+export type PartialFile = isOptional<File, 'ignore' | 'destinationPath'>;
 
 export interface FileRecord {
   [key: string]: File;
@@ -36,13 +38,19 @@ export type DestinationRecordWithoutIgnoreInfo = Omit<
 
 export type FixedDestinationRecordKeys = typeof ALL_FILES_CHAR | typeof EXCLUDE_KEY;
 
+export type PartialDestinationRecord = Record<string, DestinationRecordValue>;
+
+export type PartialConfigGroup = {
+  readonly files: PartialFile[];
+  readonly fileRecord: { [K in keyof FileRecord]: PartialFile };
+  readonly destinationRecord?: DestinationRecord;
+};
+
 export interface ConfigGroup {
-  readonly files: Files;
+  readonly files: File[];
   readonly fileRecord: FileRecord;
   readonly destinationRecord: DestinationRecord;
 }
-
-export type ConfigGroups = ConfigGroup[];
 
 export type Primitive = string | number | boolean | symbol;
 

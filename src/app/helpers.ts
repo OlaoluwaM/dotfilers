@@ -1,35 +1,65 @@
-import * as N from 'fp-ts/lib/number';
+import * as E from 'fp-ts/lib/Either';
+import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as IO from 'fp-ts/lib/IO';
 import * as RA from 'fp-ts/lib/ReadonlyArray';
-import * as Sep from 'fp-ts/lib/Separated';
+import * as TE from 'fp-ts/lib/TaskEither';
+import * as RNEA from 'fp-ts/lib/ReadonlyNonEmptyArray';
 
+import path from 'path';
 import prompts from 'prompts';
 
+import { not } from 'fp-ts/lib/Predicate';
 import { match } from 'ts-pattern';
-import { globby } from 'zx/';
-import { compose } from 'ramda';
-import { contramap } from 'fp-ts/lib/Ord';
 import { flow, pipe } from 'fp-ts/lib/function';
-import { getAllDirNamesAtFolderPath } from '@utils/index';
-import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
-import { LinkCmdOperationType, RawFile } from '@types';
+import { fs as fsExtra, chalk } from 'zx';
+import { default as readdirp, ReaddirpOptions } from 'readdirp';
+import { RawFile, PartialFile, toSourcePath, LinkCmdOperationType } from '@types';
+import {
+  isValidShellExpansion,
+  expandShellVariablesInString,
+} from '@lib/shellVarStrExpander';
 import {
   ExitCodes,
   SHELL_VARS_TO_CONFIG_GRP_DIRS,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
 } from '../constants';
 
-export function getAllFilesFromDirectory(dirPath: string): T.Task<RawFile[]> {
-  return async () =>
-    (await globby('**/*', {
-      ignore: [CONFIG_GRP_DEST_RECORD_FILE_NAME],
-      onlyFiles: true,
-      cwd: dirPath,
-      absolute: true,
-      objectMode: true,
-      dot: true,
-    })) as unknown as RawFile[];
+export function getAllOperableFilesFromConfigGroupDir(
+  rootPath: string
+): T.Task<PartialFile[]> {
+  return async () => {
+    const partialFiles = [] as PartialFile[];
+
+    const fsTraversalConfig: Partial<ReaddirpOptions> = {
+      fileFilter: [`!${CONFIG_GRP_DEST_RECORD_FILE_NAME}`],
+      directoryFilter: flow(dirInfo => dirInfo.fullPath, not(isConfigGroupDir)),
+    };
+
+    // eslint-disable-next-line no-restricted-syntax
+    for await (const fileEntryInfo of readdirp(rootPath, fsTraversalConfig)) {
+      const partialFileObj = toValidFileObj(fileEntryInfo as RawFile);
+      partialFiles.push(partialFileObj);
+    }
+
+    return partialFiles;
+  };
+}
+
+function isConfigGroupDir(dirPath: string) {
+  return fsExtra.pathExistsSync(
+    path.join(dirPath, CONFIG_GRP_DEST_RECORD_FILE_NAME)
+  );
+}
+
+function toValidFileObj(rawFileObj: RawFile) {
+  const validFileObj: PartialFile = {
+    sourcePath: toSourcePath(rawFileObj.fullPath),
+    name: rawFileObj.path,
+    basename: rawFileObj.basename,
+  };
+
+  return validFileObj;
 }
 
 export function exitCli(
@@ -56,8 +86,19 @@ export const linkOperationTypeToPastTense: Record<LinkCmdOperationType, string> 
   symlink: 'symlinked',
 };
 
-export async function optionallyGetAllConfigGrpNamesInExistence() {
-  const shouldProceedWithGettingAllConfigGrpNames = () =>
+export function getPathToDotfilesDir() {
+  return pipe(
+    SHELL_VARS_TO_CONFIG_GRP_DIRS,
+    RNEA.map(expandShellVariablesInString),
+    RA.filter(not(isValidShellExpansion)),
+    RA.head
+  );
+}
+
+export async function getPathsToAllConfigGroupDirsInExistence(): Promise<
+  ExitCodes.OK | E.Either<Error, string[]>
+> {
+  const shouldProceedWithGettingAllConfigGroupNames = () =>
     prompts(
       {
         type: 'confirm',
@@ -70,33 +111,45 @@ export async function optionallyGetAllConfigGrpNamesInExistence() {
 
   // eslint-disable-next-line no-return-await
   return await pipe(
-    shouldProceedWithGettingAllConfigGrpNames,
+    shouldProceedWithGettingAllConfigGroupNames,
     T.map(({ answer }: { answer: boolean }) =>
       match(answer)
         .with(false, () => ExitCodes.OK as const)
-        .with(true, getAllConfigGrpNames)
+        .with(true, getAllConfigGroupDirPaths())
         .exhaustive()
     )
   )();
 }
 
-async function getAllConfigGrpNames() {
-  const byLength = pipe(
-    N.Ord,
-    contramap((arr: string[]) => arr.length)
-  );
+export function getAllConfigGroupDirPaths(): TE.TaskEither<Error, string[]> {
+  return TE.tryCatch(async () => {
+    const configGroupPaths = [] as string[];
 
-  const allPossibleConfigGrpNames = await pipe(
-    SHELL_VARS_TO_CONFIG_GRP_DIRS,
-    RA.wilt(T.ApplicativePar)(
-      compose(getAllDirNamesAtFolderPath, expandShellVariablesInString)
-    )
-  )();
+    const dotfilesDirPath = getPathToDotfilesDir();
+    if (O.isNone(dotfilesDirPath)) {
+      throw new Error('Could not find dotfiles directory');
+    }
 
-  const { right: allConfigGrpNamesOption } = pipe(
-    allPossibleConfigGrpNames,
-    Sep.map(flow(RA.sortBy([byLength]), RA.head))
-  );
+    const fsTraversalConfig: Partial<ReaddirpOptions> = {
+      root: dotfilesDirPath.value,
+      directoryFilter: flow(dirInfo => dirInfo.fullPath, isConfigGroupDir),
+      type: 'directories',
+    };
 
-  return allConfigGrpNamesOption;
+    // eslint-disable-next-line no-restricted-syntax
+    for await (const dirInfo of readdirp(dotfilesDirPath.value, fsTraversalConfig)) {
+      configGroupPaths.push(dirInfo.fullPath);
+    }
+
+    return configGroupPaths;
+  }, generateConfigGroupDirPathsRetrievalError());
+}
+
+function generateConfigGroupDirPathsRetrievalError() {
+  return () =>
+    new Error(
+      chalk.bold.red(
+        'Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables? If so, then perhaps you have no configuration groups yet.'
+      )
+    );
 }

@@ -6,15 +6,14 @@ import path from 'path';
 import parseCliArgs from '@lib/minimal-argp/index';
 
 import { pipe } from 'fp-ts/lib/function';
-import { chalk } from 'zx';
 import { match, P } from 'ts-pattern';
 import { ExitCodes } from '../constants';
 import { newAggregateError } from '@utils/AggregateError';
 import {
   isNotIgnored,
-  getFilesFromConfigGrp,
-  default as createConfigGrps,
-} from '@app/configGrpOps';
+  getFilesFromConfigGroup,
+  default as createConfigGroups,
+} from '@app/configGroup';
 import {
   normalizedCopy,
   deleteThenSymlink,
@@ -25,13 +24,13 @@ import {
   exitCli,
   exitCliWithCodeOnly,
   linkOperationTypeToPastTense,
-  optionallyGetAllConfigGrpNamesInExistence,
+  getPathsToAllConfigGroupDirsInExistence,
 } from '@app/helpers';
 import {
   File,
   SourcePath,
   CmdResponse,
-  ConfigGroups,
+  ConfigGroup,
   DestinationPath,
   LinkCmdOperationType,
 } from '@types';
@@ -53,19 +52,17 @@ export default async function main(
   passedArguments: string[],
   cliOptions: string[] = []
 ) {
-  const configGrpNames = A.isEmpty(passedArguments)
-    ? await optionallyGetAllConfigGrpNamesInExistence()
+  const configGroupNamesOrDirPaths = A.isEmpty(passedArguments)
+    ? await getPathsToAllConfigGroupDirsInExistence()
     : passedArguments;
 
-  const fatalErrMsg = chalk.red.bold(
-    'Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables? If so, then perhaps you have no configuration groups yet.'
-  );
-
   // eslint-disable-next-line no-return-await
-  const cmdOutput = await match(configGrpNames)
+  const cmdOutput = await match(configGroupNamesOrDirPaths)
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
-    .with({ _tag: 'None' }, () => exitCli(fatalErrMsg, ExitCodes.GENERAL))
-    .with({ _tag: 'Some' }, (_, some) => linkCmd(some.value, cliOptions))
+    .with({ _tag: 'Left' }, (_, { left }) =>
+      exitCli(left.message, ExitCodes.GENERAL)
+    )
+    .with({ _tag: 'Right' }, (_, { right }) => linkCmd(right, cliOptions))
     .with(P.array(P.string), (_, value) => linkCmd(value, cliOptions))
     .exhaustive();
 
@@ -73,25 +70,26 @@ export default async function main(
 }
 
 async function linkCmd(
-  configGrpNames: string[],
+  configGroupNamesOrDirPaths: string[],
   cliOptions: string[] = []
-): Promise<CmdResponse<ConfigGroups>> {
+): Promise<CmdResponse<ConfigGroup[]>> {
   const chosenLinkCmdOperationFn = pipe(
     cliOptions,
     parseCmdOptions,
     performChosenLinkCmdOperation
   );
 
-  const configGrpsWithErrors = await createConfigGrps(configGrpNames)();
-  const { left: configGrpCreationErrs, right: configGrps } = configGrpsWithErrors;
+  const configGroupsWithErrors = await createConfigGroups(configGroupNamesOrDirPaths)();
+  const { left: configGroupCreationErrs, right: configGroups } =
+    configGroupsWithErrors;
 
-  const operationFeedback = await chosenLinkCmdOperationFn(configGrps)();
+  const operationFeedback = await chosenLinkCmdOperationFn(configGroups)();
   const { left: operationErrors, right: operationOutput } = operationFeedback;
 
   return {
-    errors: [...configGrpCreationErrs, ...operationErrors],
+    errors: [...configGroupCreationErrs, ...operationErrors],
     output: operationOutput,
-    forTest: configGrps,
+    forTest: configGroups,
   };
 }
 
@@ -132,18 +130,17 @@ function determineLinkCmdOperationToPerform(
 function performChosenLinkCmdOperation(
   linkCmdOperationToPerform: LinkCmdOperationType
 ) {
-  return (configGrpObjs: ConfigGroups) => {
+  return (configGroups: ConfigGroup[]) => {
     const linkCmdOperationFn = createChosenLinkOperationFn(
       linkCmdOperationToPerform
     );
 
     return pipe(
-      configGrpObjs,
-      A.map(getFilesFromConfigGrp),
-      A.flatten,
+      configGroups,
+      A.chain(getFilesFromConfigGroup),
       A.filter<File>(isNotIgnored),
 
-      A.wilt(T.ApplicativePar)(({ path: sourcePath, destinationPath }) =>
+      A.wilt(T.ApplicativePar)(({ sourcePath, destinationPath }) =>
         linkCmdOperationFn(sourcePath, destinationPath)
       )
     );
@@ -168,7 +165,8 @@ function createChosenLinkOperationFn(linkOperationType: LinkCmdOperationType) {
                 )
                 .with('symlink', () =>
                   deleteThenSymlink(pathToSourceEntity, destinationPath)
-                ).exhaustive()
+                )
+                .exhaustive()
           )
         )();
 

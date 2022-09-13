@@ -16,59 +16,62 @@ import { createDirIfItDoesNotExist, doesPathExist } from '@utils/index';
 import { CONFIG_GRP_DEST_RECORD_FILE_NAME, ExitCodes } from '../constants';
 import {
   DEFAULT_DEST_RECORD_FILE_CONTENTS,
-  generateAbsolutePathToConfigGrpDir,
-} from '@app/configGrpOps';
+  generateAbsolutePathToConfigGroupDir,
+} from '@app/configGroup';
 
-export default async function main(configGrpNames: string[] | [], _: string[] = []) {
+export default async function main(
+  configGroupNames: string[] | [],
+  _: string[] = []
+) {
   const fatalErrMsg = chalk.red.bold(
     'No config group names were specified. Exiting...'
   );
 
-  const cmdOutput = await match(configGrpNames)
+  const cmdOutput = await match(configGroupNames)
     .with([], () => exitCli(fatalErrMsg, ExitCodes.GENERAL))
-    .with(P.array(P.string), (__, value) => createConfigGrpDir(value))
+    .with(P.array(P.string), (__, value) => createConfigGroupDir(value))
     .exhaustive();
 
   return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
-async function createConfigGrpDir(
-  configGrpNames: string[]
+async function createConfigGroupDir(
+  configGroupNames: string[]
 ): Promise<CmdResponse<string[]>> {
-  const { left: pathGenerationErrors, right: allAbsPathsToPotentialConfigGrps } =
-    generatePathsToPotentialConfigGrps(configGrpNames);
+  const { left: pathGenerationErrors, right: allAbsPathsToPotentialConfigGroups } =
+    generatePathsToPotentialConfigGroupDirs(configGroupNames);
 
-  const { left: warningsForExistingGrps, right: groupCreationOutput } = await pipe(
-    allAbsPathsToPotentialConfigGrps,
+  const { left: warningsForExistingGroups, right: groupCreationOutput } = await pipe(
+    allAbsPathsToPotentialConfigGroups,
     A.wilt(T.ApplicativePar)(generateConfigGroupDirForNonExistingOnes)
   )();
 
   return {
     errors: pathGenerationErrors,
-    warnings: warningsForExistingGrps,
+    warnings: warningsForExistingGroups,
     output: groupCreationOutput,
-    forTest: allAbsPathsToPotentialConfigGrps,
+    forTest: allAbsPathsToPotentialConfigGroups,
   };
 }
 
-function generatePathsToPotentialConfigGrps(configGrpNames: string[]) {
+function generatePathsToPotentialConfigGroupDirs(configGroupNames: string[]) {
   return pipe(
-    configGrpNames,
-    A.map(configGrpName =>
+    configGroupNames,
+    A.map(configGroupName =>
       pipe(
-        configGrpName,
-        generateAbsolutePathToConfigGrpDir,
-        E.fromOption(handleAbsPathToPotentialConfigGrpError(configGrpName))
+        configGroupName,
+        generateAbsolutePathToConfigGroupDir,
+        E.fromOption(generateConfigGroupDirPathCreationError(configGroupName))
       )
     ),
     A.separate
   );
 }
 
-function handleAbsPathToPotentialConfigGrpError(configGrpName: string) {
+function generateConfigGroupDirPathCreationError(configGroupName: string) {
   return () =>
     newAggregateError(
-      `Error, could not generate a path to the ${configGrpName} config group`
+      `Error, could not generate a path to the ${configGroupName} config group`
     );
 }
 
@@ -83,9 +86,9 @@ function generateConfigGroupDirForNonExistingOnes(absPath: string) {
   ) as TE.TaskEither<string, string>;
 }
 
-function createDefaultDestinationRecordFile(configGrpDirPath: string) {
+function createDefaultDestinationRecordFile(configGroupDirPath: string) {
   return async () => {
-    const fileName = path.join(configGrpDirPath, CONFIG_GRP_DEST_RECORD_FILE_NAME);
+    const fileName = path.join(configGroupDirPath, CONFIG_GRP_DEST_RECORD_FILE_NAME);
 
     return await writeFile(
       fileName,

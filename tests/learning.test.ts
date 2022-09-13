@@ -1,8 +1,16 @@
+import * as A from 'fp-ts/lib/Array';
+import * as T from 'fp-ts/lib/Task';
+
+import path from 'path';
 import micromatch from 'micromatch';
 
+import { pipe } from 'fp-ts/lib/function';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { describe, test, expect } from '@jest/globals';
 import { globby, $, fs as fsExtra } from 'zx';
+import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants';
+import { default as readdirp, ReaddirpOptions } from 'readdirp';
+import { getRelativePathWithoutLeadingPathSeparator } from '@utils/index';
 
 describe('Learning tests to verify behavior of globby package', () => {
   test("That globby doesn't error, but instead returns an empty array on no match", async () => {
@@ -92,5 +100,67 @@ describe.skip('Learning tests to verify behavior of the micromatch package', () 
     micromatch.isMatch('foo.js', ['f*', '*.js'], { onMatch });
     console.log({ f });
     // Assert
+  });
+});
+
+describe('Learning tests to verify usage of the readdirp package', () => {
+  const rootPath = `${TEST_DATA_DIR_PREFIX}/learning/readdirp/dirOne`;
+
+  test('If I can omit retrieving files from directories that contain a certain file', async () => {
+    // Arrange
+    const config: Partial<ReaddirpOptions> = {
+      fileFilter: [`!${CONFIG_GRP_DEST_RECORD_FILE_NAME}`],
+      directoryFilter: ({ fullPath }) =>
+        !fsExtra.pathExistsSync(
+          path.join(fullPath, CONFIG_GRP_DEST_RECORD_FILE_NAME)
+        ),
+    };
+
+    const expectedFiles = [
+      'example.css',
+      'index.ts',
+      'sample.js',
+      'innerTwo/example.ts',
+      'innerTwo/farrow.rs',
+      'innerThree/example.py',
+      'innerThree/farrow.cc',
+    ];
+
+    // Act
+    const returnedFiles = await pipe(
+      () => readdirp.promise(rootPath, config),
+      T.chainFirstIOK((o) => () => console.log(JSON.stringify(o, null, 2))),
+      T.map(A.map(fileEntryInfo => fileEntryInfo.path))
+    )();
+
+    // Assert
+    expect(returnedFiles).toEqual(expectedFiles);
+  });
+
+  test('Should ensure that I can get only those directories that contain a certain file', async () => {
+    // Arrange
+    const config: Partial<ReaddirpOptions> = {
+      directoryFilter: ({ fullPath }) =>
+        fsExtra.pathExistsSync(
+          path.join(fullPath, CONFIG_GRP_DEST_RECORD_FILE_NAME)
+        ),
+      type: 'directories',
+    };
+
+    const expectedDirs = ['inner', 'innerFour', 'inner/innerTwo'];
+
+    // Act
+    const returnedDirs = await pipe(
+      () => readdirp.promise(rootPath, config),
+      T.chainFirstIOK(o => () => console.log(JSON.stringify(o, null, 2))),
+      T.map(
+        A.map(dirInfo =>
+          getRelativePathWithoutLeadingPathSeparator(rootPath)(dirInfo.fullPath)
+        )
+      )
+    )();
+
+    // Assert
+    expect(returnedDirs).toEqual(expectedDirs);
   });
 });

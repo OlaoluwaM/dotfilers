@@ -9,8 +9,8 @@ import { pipe } from 'fp-ts/lib/function';
 import { fs as fsExtra } from 'zx';
 import { defaultDestRecordEq } from './helpers';
 import { TEST_DATA_DIR_PREFIX } from './setup';
-import { default as createConfigGrpCmd } from '@cmds/createConfigGrp';
-import { DEFAULT_DEST_RECORD_FILE_CONTENTS } from '@app/configGrpOps';
+import { default as createConfigGroupCmd } from '@cmds/createConfigGroup';
+import { DEFAULT_DEST_RECORD_FILE_CONTENTS } from '@app/configGroup';
 import { describe, test, expect, beforeAll } from '@jest/globals';
 import {
   ExitCodes,
@@ -51,8 +51,8 @@ describe('Tests for the happy path', () => {
     ['DOTS', ['spicetify', 'btop', 'mcfly']],
     ['DOTFILES', ['node', 'tilix', 'neovim', 'fzf']],
   ])(
-    'Should ensure that the createConfigGrp command can create config groups with default destination record files even if one (%s) of the two mutually exclusive environment variables is not set',
-    async (envVarName, nonExistingConfigGrpNames) => {
+    'Should ensure that the createConfigGroup command can create config groups with default destination record files even if one (%s) of the two mutually exclusive environment variables is not set',
+    async (envVarName, nonExistingConfigGroupNames) => {
       // Arrange
       process.env[envVarName] = '';
 
@@ -61,16 +61,16 @@ describe('Tests for the happy path', () => {
         errors,
         warnings,
         output: cmdOutput,
-        forTest: configGrpDirPaths,
-      } = await createConfigGrpCmd(
-        nonExistingConfigGrpNames.concat(NAMES_OF_EXISTING_CONFIG_GRPS)
+        forTest: configGroupDirPaths,
+      } = await createConfigGroupCmd(
+        nonExistingConfigGroupNames.concat(NAMES_OF_EXISTING_CONFIG_GRPS)
       );
 
-      const numOfCreatedConfigGrps = await pipe(
-        configGrpDirPaths,
-        T.traverseArray(configGrpDirPath =>
+      const numOfCreatedConfigGroups = await pipe(
+        configGroupDirPaths,
+        T.traverseArray(configGroupDirPath =>
           pipe(
-            `${configGrpDirPath}/${CONFIG_GRP_DEST_RECORD_FILE_NAME}`,
+            `${configGroupDirPath}/${CONFIG_GRP_DEST_RECORD_FILE_NAME}`,
             diffDestinationRecordFile
           )
         ),
@@ -81,14 +81,14 @@ describe('Tests for the happy path', () => {
       // Assert
       expect(errors).toEqual([]);
       expect(warnings?.length).toBe(NAMES_OF_EXISTING_CONFIG_GRPS.length);
-      expect(numOfCreatedConfigGrps).toBe(nonExistingConfigGrpNames.length);
+      expect(numOfCreatedConfigGroups).toBe(nonExistingConfigGroupNames.length);
       expect(cmdOutput.length).toBeGreaterThanOrEqual(
-        nonExistingConfigGrpNames.length
+        nonExistingConfigGroupNames.length
       );
 
       // Cleanup
       process.env[envVarName] = `${CMD_TEST_DATA_DIR}/mock-dots`;
-      await removeDirs(nonExistingConfigGrpNames);
+      await removeDirs(nonExistingConfigGroupNames);
     }
   );
 
@@ -96,21 +96,21 @@ describe('Tests for the happy path', () => {
 });
 
 describe('Tests for everything but the happy path', () => {
-  test('Should ensure that the createConfigGrp command exits gracefully if no arguments are passed', async () => {
+  test('Should ensure that the createConfigGroup command exits gracefully if no arguments are passed', async () => {
     // Arrange
     // Act
-    await createConfigGrpCmd([]);
+    await createConfigGroupCmd([]);
 
     // Assert
     expect(process.exit).toHaveBeenCalledWith(ExitCodes.GENERAL);
   });
 
-  test(`Should ensure that the createConfigGrp command exits with errors if none of the required environment variables (${SHELL_VARS_TO_CONFIG_GRP_DIRS_STR}) are set`, async () => {
+  test(`Should ensure that the createConfigGroup command exits with errors if none of the required environment variables (${SHELL_VARS_TO_CONFIG_GRP_DIRS_STR}) are set`, async () => {
     // Arrange
     process.env.DOTS = '';
     process.env.DOTFILES = '';
 
-    const nonExistingConfigGrpNames = [
+    const nonExistingConfigGroupNames = [
       'rust',
       'shell',
       'starship',
@@ -118,7 +118,7 @@ describe('Tests for everything but the happy path', () => {
       'ohmyzsh',
     ];
 
-    const mockConfigGrpNames = nonExistingConfigGrpNames.concat(
+    const mockConfigGroupNames = nonExistingConfigGroupNames.concat(
       NAMES_OF_EXISTING_CONFIG_GRPS
     );
 
@@ -127,10 +127,14 @@ describe('Tests for everything but the happy path', () => {
       errors,
       warnings,
       output: cmdOutput,
-    } = await createConfigGrpCmd(mockConfigGrpNames);
+    } = await createConfigGroupCmd(mockConfigGroupNames);
 
     // Assert
     expect([warnings, cmdOutput]).toEqual([[], []]);
-    expect(errors.length).toBe(mockConfigGrpNames.length);
+    expect(errors.length).toBe(mockConfigGroupNames.length);
+
+    // Cleanup
+    process.env.DOTS = `${CMD_TEST_DATA_DIR}/mock-dots`;
+    process.env.DOTFILES = `${CMD_TEST_DATA_DIR}/mock-dots`;
   });
 });

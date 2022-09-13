@@ -25,8 +25,15 @@ cp -r -n $TARGET_DIR/mock-dots/git/. $TARGET_DIR/valid-mock-dots/git/
 touch $TARGET_DIR/mock-dots/bat/{bat-config.json,.bat-colors}
 cp -r -n $TARGET_DIR/mock-dots/bat/. "$TARGET_DIR/valid-mock-dots/bat"
 
+# mkdir -p $TARGET_DIR/valid-mock-dots/bat/inner/
+# touch $TARGET_DIR/valid-mock-dots/bat/inner/destinations.json
+
 touch $TARGET_DIR/mock-dots/neovim/{config.lua,neovim.user.config.lua}
 cp -r -n $TARGET_DIR/mock-dots/neovim/. $TARGET_DIR/valid-mock-dots/neovim/
+
+# mkdir -p $TARGET_DIR/valid-mock-dots/neovim/inner/innerTwo
+# touch $TARGET_DIR/valid-mock-dots/neovim/inner/destinations.json
+# touch $TARGET_DIR/valid-mock-dots/neovim/inner/innerTwo/destinations.json
 
 touch $TARGET_DIR/mock-dots/tilix/{config.json,user.css,themes.txt}
 cp -r -n $TARGET_DIR/mock-dots/tilix/. $TARGET_DIR/valid-mock-dots/tilix/

@@ -4,6 +4,7 @@ import * as T from 'fp-ts/lib/Task';
 import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
+import path from 'path';
 import boxen from 'boxen';
 
 import { pipe } from 'fp-ts/lib/function';
@@ -11,14 +12,13 @@ import { MonoidAll } from 'fp-ts/lib/boolean';
 import { not, isEmpty, slice } from 'ramda';
 import { chalk, fs as fsExtra } from 'zx';
 import { filter as recordFilter } from 'fp-ts/lib/Record';
-import { mkdir, unlink, link, symlink, readdir, copyFile } from 'fs/promises';
+import { mkdir, unlink, link, symlink, copyFile } from 'fs/promises';
+import { AnyObject, SourcePath, DestinationPath } from '@types';
 import {
   AggregateError,
   newAggregateError,
   getErrorMessagesFromAggregateErr,
 } from './AggregateError';
-import { Primitive, AnyObject, SourcePath, DestinationPath } from '@types';
-import path from 'path';
 
 export function getCLIArguments(startingInd: number) {
   return slice(startingInd, Infinity)(process.argv);
@@ -31,10 +31,6 @@ export function trace<T>(...logContents: string[]) {
     console.log(...otherLogContents, val);
     return val;
   };
-}
-
-export function id<T>(value: T) {
-  return value;
 }
 
 export function doesPathExist(
@@ -189,37 +185,6 @@ export const deleteThenHardlink = withDeleteFirst(link);
 export const normalizedCopy = async (src: SourcePath, dest: DestinationPath) =>
   await copyFile(src, dest);
 
-export function getAllDirNamesAtFolderPath(folderPath: string) {
-  return TE.tryCatch(
-    async () => {
-      const folderContents = await readdir(folderPath, {
-        withFileTypes: true,
-      });
-
-      return pipe(
-        folderContents,
-        A.filter(
-          dirent => dirent.isDirectory() && isNotAHiddenDirectory(dirent.name)
-        ),
-        A.map(({ name: dirName }) => dirName)
-      );
-    },
-    reason => newAggregateError(reason as Error)
-  );
-}
-
-function isNotAHiddenDirectory(dirName: string) {
-  const HIDDEN_FOLDER_REGEX = /^\..*/;
-  return !HIDDEN_FOLDER_REGEX.test(dirName);
-}
-
-export function transformNonStringPrimitivesToStrings(
-  nonStringPrimitives: Primitive
-) {
-  if (typeof nonStringPrimitives === 'string') return nonStringPrimitives;
-  return '';
-}
-
 export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
   return async () => {
     await fsExtra.ensureDir(dirPath);
@@ -228,5 +193,10 @@ export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
 
 export function removeLeadingPathSeparator(dirPath: string) {
   const leadingPathSeparatorRegex = new RegExp(`^${path.sep}+`);
-  return S.replace(leadingPathSeparatorRegex, '')(dirPath)
+  return S.replace(leadingPathSeparatorRegex, '')(dirPath);
+}
+
+export function getRelativePathWithoutLeadingPathSeparator(rootPath: string) {
+  return (fullPath: string) =>
+    pipe(fullPath, S.replace(rootPath, ''), removeLeadingPathSeparator);
 }
