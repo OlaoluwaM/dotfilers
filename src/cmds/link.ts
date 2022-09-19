@@ -18,7 +18,7 @@ import {
   normalizedCopy,
   deleteThenSymlink,
   deleteThenHardlink,
-  createEntityPathIfItDoesNotExist,
+  createDirIfItDoesNotExist,
 } from '@utils/index';
 import {
   exitCli,
@@ -79,7 +79,9 @@ async function linkCmd(
     performChosenLinkCmdOperation
   );
 
-  const configGroupsWithErrors = await createConfigGroups(configGroupNamesOrDirPaths)();
+  const configGroupsWithErrors = await createConfigGroups(
+    configGroupNamesOrDirPaths
+  )();
   const { left: configGroupCreationErrs, right: configGroups } =
     configGroupsWithErrors;
 
@@ -152,7 +154,7 @@ function createChosenLinkOperationFn(linkOperationType: LinkCmdOperationType) {
     TE.tryCatch(
       async () => {
         await pipe(
-          createEntityPathIfItDoesNotExist(path.dirname(destinationPath)),
+          createDirIfItDoesNotExist(path.dirname(destinationPath)),
 
           T.chain(
             () => () =>

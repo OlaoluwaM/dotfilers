@@ -80,7 +80,7 @@ describe('Learning tests to verify behavior of fs-extra package', () => {
   );
 });
 
-describe.skip('Learning tests to verify behavior of the micromatch package', () => {
+describe.only('Learning tests to verify behavior of the micromatch package', () => {
   test('a', () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let f: string = '';
@@ -89,6 +89,7 @@ describe.skip('Learning tests to verify behavior of the micromatch package', () 
     const gb = {
       '*.js': 'rrr',
       'f*': 'scv',
+      'd*': 'ddd'
     } as Record<string, string>;
 
     const onMatch = ({ glob }: { glob: string }) => {
@@ -97,7 +98,11 @@ describe.skip('Learning tests to verify behavior of the micromatch package', () 
     };
 
     // Act
-    micromatch.isMatch('foo.js', ['f*', '*.js'], { onMatch });
+    micromatch.contains(
+      '/home/olaolu/Desktop/olaolu_dev/dev/dotfilers/tests/test-data/learning/readdirp/dirOne/inner/innerTw/foo.js',
+      ['d*', 'f*', '*.js'],
+      { onMatch }
+    );
     console.log({ f });
     // Assert
   });

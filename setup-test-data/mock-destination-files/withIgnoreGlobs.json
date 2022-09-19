@@ -1,4 +1,0 @@
-{
-  "exclude": ["*.js", "*.ts"],
-  "all": "~/.sample/default"
-}

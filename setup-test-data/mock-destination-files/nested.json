@@ -1,5 +1,0 @@
-{
-  "inner/user.css": "~/.config/styles",
-  "user.css": "~/.config/other/styles",
-  "inner/sample.js": "~/.config/sample"
-}

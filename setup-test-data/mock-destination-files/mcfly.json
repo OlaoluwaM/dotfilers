@@ -1,6 +1,0 @@
-{
-  "*.js": "~/.config/node",
-  "*s": "~/.config/ss",
-  "sample.js": "~/.config/sample",
-  "example.js": "~/.config/example"
-}

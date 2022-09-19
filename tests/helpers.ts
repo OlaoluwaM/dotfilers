@@ -1,7 +1,10 @@
 import * as A from 'fp-ts/lib/Array';
+import * as L from 'monocle-ts/Lens';
+import * as R from 'fp-ts/lib/Record';
 import * as O from 'fp-ts/lib/Option';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
+import * as MT from 'monocle-ts/Traversal';
 import * as Eq from 'fp-ts/lib/Eq';
 
 import path from 'path';
@@ -9,10 +12,10 @@ import path from 'path';
 import { not } from 'fp-ts/lib/Predicate';
 import { concatAll } from 'fp-ts/lib/Monoid';
 import { MonoidAll } from 'fp-ts/lib/boolean';
-import { stat, lstat } from 'fs/promises';
 import { fs as fsExtra } from 'zx';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
-import { compose, lensProp, view } from 'ramda';
+import { stat, lstat, writeFile } from 'fs/promises';
+import { compose, lensProp, values, view } from 'ramda';
 import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants';
 import { getFilesFromConfigGroup, isNotIgnored } from '@app/configGroup';
 import {
@@ -124,3 +127,64 @@ export const readRawDestinationRecordFile = async (
       CONFIG_GRP_DEST_RECORD_FILE_NAME
     )
   );
+
+export function createFile(rootPath: string) {
+  return (fileName: string, content: string = ''): T.Task<void> =>
+    async () =>
+      await writeFile(path.join(rootPath, fileName), content, { encoding: 'utf-8' });
+}
+
+export function generatePath(rootPath: string) {
+  return (entityName: string) => path.join(rootPath, entityName);
+}
+
+export const filenameLens = pipe(L.id<File>(), L.prop('name'));
+export const fileBasenameLens = pipe(L.id<File>(), L.prop('basename'));
+export const sourcePathLens = pipe(L.id<File>(), L.prop('sourcePath'));
+export const destinationPathLens = pipe(L.id<File>(), L.prop('destinationPath'));
+export const fileRecordLens = pipe(L.id<ConfigGroup>(), L.prop('fileRecord'));
+const fileObjLens = pipe(L.id<ConfigGroup>(), L.prop('files'));
+
+export const getIgnoredFilesFromConfigGroups = (configGroups: ConfigGroup[]) =>
+  pipe(
+    configGroups,
+    A.chain(fileObjLens.get),
+    A.filter(({ ignore }) => ignore === true)
+  );
+
+export const getNonIgnoredFilesFromConfigGroups = (configGroups: ConfigGroup[]) =>
+  pipe(
+    configGroups,
+    A.chain(fileObjLens.get),
+    A.filter(({ ignore }) => ignore === false)
+  );
+
+const destinationPathLensFromConfigGroup = pipe(
+  fileObjLens,
+  L.asTraversal,
+  MT.traverse(A.Traversable),
+  MT.prop('destinationPath')
+);
+
+const fileTraversable = pipe(
+  MT.id<File[]>(),
+  MT.traverse(A.Traversable),
+);
+
+export const getFileNamesFromFiles = (files: File[]) =>
+  MT.getAll(files)(pipe(fileTraversable, MT.prop('name'))) as string[];
+
+export const getDestinationPathsFromFiles = (files: File[]) =>
+  MT.getAll(files)(pipe(fileTraversable, MT.prop('destinationPath'))) as DestinationPath[];
+
+const getDestinationPathsForConfigGroup = (configGroup: ConfigGroup) =>
+  MT.getAll(configGroup)(destinationPathLensFromConfigGroup) as DestinationPath[];
+
+export const getDestinationPathsForConfigGroups = (configGroups: ConfigGroup[]) =>
+  pipe(configGroups, A.chain(getDestinationPathsForConfigGroup));
+
+const getFileNamesFromConfigGroup = (configGroup: ConfigGroup) =>
+  pipe(fileRecordLens.get(configGroup), R.map(filenameLens.get), values);
+
+export const getFileNamesFromConfigGroups = (configGroups: ConfigGroup[]) =>
+  pipe(configGroups, A.chain(getFileNamesFromConfigGroup));
