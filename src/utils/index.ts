@@ -186,9 +186,7 @@ export const normalizedCopy = async (src: SourcePath, dest: DestinationPath) =>
   await copyFile(src, dest);
 
 export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
-  return async () => {
-    await fsExtra.ensureDir(dirPath);
-  };
+  return async () => await fsExtra.ensureDir(dirPath);
 }
 
 export function removeLeadingPathSeparator(dirPath: string) {

@@ -281,8 +281,11 @@ function includeAdditionalMetaDataToConfigGroup(
           fileInfo,
           computeFileDestinationPath,
           (incompleteAbsDestinationPath: DestinationPath) =>
-            path.join(incompleteAbsDestinationPath, fileRecordPropEntry.basename)
-        ) as DestinationPath,
+            path.join(
+              incompleteAbsDestinationPath,
+              fileRecordPropEntry.basename
+            ) as DestinationPath
+        ),
       };
     })
   ) as ConfigGroup['fileRecord'];
@@ -348,20 +351,28 @@ function determineFileDestinationPath(
 }
 
 function createGlobMatchRetriever(destinationRecord: DestinationRecord) {
-  const allSpecifiedGlobPatterns = pipe(
+  const globsOfFilesToIgnore = match(destinationRecord[EXCLUDE_KEY])
+    .with(ALL_FILES_CHAR, () => [])
+    .with(P.array(P.string), (_, ignoreArr) => pipe(ignoreArr, A.filter(isGlob)))
+    .exhaustive();
+
+  const destinationGlobs = pipe(
     destinationRecord,
     R.filterWithIndex(potentialGlob => isGlob(potentialGlob)),
     R.keys
   );
 
-  return ([fileName]: FileInfo): MatchingGlobPattern => {
+  return ([fileName, fileAbsSourcePath]: FileInfo): MatchingGlobPattern => {
     let matchingGlobPattern: MatchingGlobPattern = NOT_FOUND;
 
     const onMatch = ({ glob }: { glob: string }) => {
       matchingGlobPattern = glob;
     };
 
+    const allSpecifiedGlobPatterns = [...destinationGlobs, ...globsOfFilesToIgnore];
+
     micromatch.isMatch(fileName, allSpecifiedGlobPatterns, { onMatch });
+    micromatch.contains(fileAbsSourcePath, allSpecifiedGlobPatterns, { onMatch });
 
     return matchingGlobPattern;
   };
