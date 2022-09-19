@@ -80,7 +80,7 @@ describe('Learning tests to verify behavior of fs-extra package', () => {
   );
 });
 
-describe.only('Learning tests to verify behavior of the micromatch package', () => {
+describe.skip('Learning tests to verify behavior of the micromatch package', () => {
   test('a', () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let f: string = '';

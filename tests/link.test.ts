@@ -88,7 +88,7 @@ describe('Tests for the happy path', () => {
     )();
 
     // Assert
-    expect(errors).toEqual([]);
+    expect(errors).toBeEmpty();
     expect(doAllDestinationSymlinksExist).toBeTrue();
   });
 
@@ -112,7 +112,7 @@ describe('Tests for the happy path', () => {
       )();
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(doAllDestinationSymlinksExist).toBeTrue();
 
       // Cleanup
@@ -147,7 +147,7 @@ describe('Tests for the happy path', () => {
       )();
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(doAllDestinationHardlinksExist).toBeTrue();
     }
   );
@@ -169,7 +169,7 @@ describe('Tests for the happy path', () => {
       )();
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(doAllDestinationFilesExist).toBeTrue();
     }
   );
@@ -191,7 +191,7 @@ describe('Tests for the happy path', () => {
     )();
 
     // Assert
-    expect(errors).toEqual([]);
+    expect(errors).toBeEmpty();
     expect(doAllDestinationSymlinksExist).toBeTrue();
   });
 
@@ -226,7 +226,7 @@ describe('Tests for the happy path', () => {
       // Assert
       pipe(
         numberOfDirectoriesInDotfilesFolder,
-        E.chainFirst(() => E.right(expect(errors).toEqual([]))),
+        E.chainFirst(() => E.right(expect(errors).toBeEmpty())),
         E.chainFirstW(() => E.right(expect(doAllDestinationPathsExist).toBeTrue())),
         E.mapLeft(manualFail)
       );
@@ -279,7 +279,7 @@ describe('Tests for the happy path', () => {
       const isTestForIgnoringAllFiles = testDescription.includes('all');
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(allIgnoredFilesWereSymlinked).toBeFalse();
 
       if (isTestForIgnoringAllFiles) {
@@ -345,7 +345,7 @@ describe('Tests for the happy path', () => {
     );
 
     // Assert
-    expect(errors).toEqual([]);
+    expect(errors).toBeEmpty();
     expect(doAllDestinationSymlinksExist).toBeTrue();
     expect(doAllDestinationPathsPointToTheDefault).toBeTrue();
   });
@@ -378,7 +378,7 @@ describe('Tests for the happy path', () => {
       );
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(doAllDestinationSymlinksExist).toBeTrue();
       expect(allDestinationPathsPointToHomeDirectory).toBeTrue();
     }
@@ -441,7 +441,7 @@ describe('Tests for the happy path', () => {
         await checkIfAllPathsAreValid(destinationPaths)();
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(configGroupFileNames).toIncludeAllMembers(mockConfigGroupFiles);
       expect(doAllDestinationPathsPointToTheSameDir).toBeTrue();
       expect(doAllConfigGroupFilesExistAtTheirDestinationPaths).toBeTrue();
@@ -518,7 +518,7 @@ describe('Tests for the happy path', () => {
         await checkIfAllPathsAreValid(destinationPathsForAllFiles)();
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(configGroupFileNames).toIncludeAllMembers(allMockConfigGroupFiles);
       expect(doAllConfigGroupFilesExistAtTheirDestinationPaths).toBeTrue();
       expect(directFileNameDestinationPathsWereChosenOverGlobDestPaths).toBeTrue();
@@ -597,7 +597,7 @@ describe('Tests for the happy path', () => {
       )();
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(ignoredFileNames).toIncludeAllMembers(allIgnoredFiles);
       expect(allIgnoredFileDestinationPathsAreValid).toBeFalse();
     });
@@ -660,7 +660,7 @@ describe('Tests for the happy path', () => {
       );
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(configGroupFileNames).toIncludeAllMembers(mockNestedConfigGroupFiles);
       expect(doAllFileDestinationPathsPointToTheDefault).toBeTrue();
     });
@@ -743,7 +743,7 @@ describe('Tests for the happy path', () => {
           await checkIfAllPathsAreValid(destinationPaths)();
 
         // Assert
-        expect(errors).toEqual([]);
+        expect(errors).toBeEmpty();
         expect(allConfigGroupFilesWerePlacedAtDestinationPath).toBeTrue();
         expect(allNestedFilesWerePlacedAtTheirSpecifiedDestinationPath).toBeTrue();
       }
@@ -808,7 +808,7 @@ describe('Tests for the happy path', () => {
         await checkIfAllPathsAreValid(destinationPaths)();
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(allNestedFilesExistAtTheirDestinationPaths).toBeTrue();
       expect(nestedFilesPointToTheExpectedDestinationPath).toBeTrue();
     });
@@ -864,7 +864,7 @@ describe('Tests for the happy path', () => {
         await checkIfAllPathsAreValid(ignoredFileDestinationPaths)();
 
       // Assert
-      expect(errors).toEqual([]);
+      expect(errors).toBeEmpty();
       expect(allNestedFilesExistAtTheirDestinationPaths).toBeFalse();
 
       expect(ignoredFilenames).toIncludeSameMembers(
@@ -873,97 +873,229 @@ describe('Tests for the happy path', () => {
     });
   });
 
-  describe.skip('Tests for nested config groups', () => {
-    // ? Break this up into two tests (rewrite)
-    // * One for checking if we can work with nested config groups
-    // * Another for asserting that nested config groups have their contents isolated from their parent
-    // ! Do away with assertion on command output, makes tests flaky
-    test('Should ensure that the link command works with nested config groups as it would any other, top-level, config group and that files within a nested config group are unseen by parent config group of the nested config group', async () => {
+  describe('Tests for nested config groups', () => {
+    test.each([
+      ['symlink', []],
+      ['hardlink', ['-H']],
+      ['copy', ['--copy']],
+    ])(
+      'Should ensure that the link command can %s files within nested config groups',
+      async (_, mockCLIOptions) => {
+        // Arrange
+        const mockConfigGroupName = 'nestedConfigGroup';
+        const nestedConfigGroupDefaultDestPathShellStr = '$HOME/.mock/nested';
+
+        const mockDestinationsRecordForTopLevelConfigGroup = {
+          [ALL_FILES_CHAR]: '$HOME/.mock/topLevel',
+        };
+
+        const mockDestinationsRecordForNestedConfigGroup = {
+          [ALL_FILES_CHAR]: nestedConfigGroupDefaultDestPathShellStr,
+        };
+
+        const nestedConfigGroupName = 'innerConfigGroup';
+        const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
+
+        const mockConfigGroupSetupTask = pipe(
+          generateConfigGroupStructure(
+            generateConfigGroupEntityPath(nestedConfigGroupName)
+          ),
+          createDirIfItDoesNotExist
+        );
+
+        const topLevelConfigGroupFileNames = ['sample.js', 'example.rs', 'test.py'];
+
+        const nestedConfigGroupFileNames = pipe(
+          ['sample.rs', 'index.ts', 'user.md'],
+          A.map(filename => path.join(nestedConfigGroupName, filename))
+        );
+
+        const allConfigGroupFileNames = [
+          ...topLevelConfigGroupFileNames,
+          ...nestedConfigGroupFileNames,
+        ];
+
+        const mockConfigGroupFilesCreationTask = pipe(
+          allConfigGroupFileNames,
+          T.traverseArray(
+            compose(createConfigGroupFile, generateConfigGroupEntityPath)
+          )
+        );
+
+        const mockTopLevelConfigGroupDestinationRecordCreationTask =
+          createConfigGroupFile(
+            generateConfigGroupEntityPath(CONFIG_GRP_DEST_RECORD_FILE_NAME),
+            JSON.stringify(mockDestinationsRecordForTopLevelConfigGroup)
+          );
+
+        const mockNestedConfigGroupDestinationRecordCreationTask =
+          createConfigGroupFile(
+            generateConfigGroupEntityPath(
+              path.join(nestedConfigGroupName, CONFIG_GRP_DEST_RECORD_FILE_NAME)
+            ),
+            JSON.stringify(mockDestinationsRecordForNestedConfigGroup)
+          );
+
+        await mockConfigGroupSetupTask();
+        await mockConfigGroupFilesCreationTask();
+        await mockNestedConfigGroupDestinationRecordCreationTask();
+        await mockTopLevelConfigGroupDestinationRecordCreationTask();
+
+        // Act
+        const { errors, forTest: configGroups } = await linkCmd(
+          [`${mockConfigGroupName}/${nestedConfigGroupName}`],
+          mockCLIOptions
+        );
+
+        const fileNames = getFileNamesFromConfigGroups(configGroups);
+        const nestedConfigGroupDestinationPaths =
+          getDestinationPathsForConfigGroups(configGroups);
+        const expectedDestPathForAllFilesInNestedConfigGroup =
+          expandShellVariablesInString(nestedConfigGroupDefaultDestPathShellStr);
+
+        const allNestedConfigGroupDestinationPathsPointToTheExpectedDefault = pipe(
+          nestedConfigGroupDestinationPaths,
+          A.map(path.dirname),
+          A.every(destPath =>
+            S.Eq.equals(expectedDestPathForAllFilesInNestedConfigGroup, destPath)
+          )
+        );
+
+        const allNestedFilesExistAtTheirDestinationPaths =
+          await checkIfAllPathsAreValid(nestedConfigGroupDestinationPaths)();
+
+        // Assert
+        expect(errors).toBeEmpty();
+        expect(allNestedFilesExistAtTheirDestinationPaths).toBeTrue();
+
+        expect(fileNames).toIncludeSameMembers(
+          pipe(nestedConfigGroupFileNames, A.map(path.basename))
+        );
+
+        expect(
+          allNestedConfigGroupDestinationPathsPointToTheExpectedDefault
+        ).toBeTrue();
+      }
+    );
+
+    test('Should ensure that nested config groups have their files and child directories hidden from parent and ancestor config groups', async () => {
       // Arrange
-      const mockConfigGroupNames = [
-        'nestedConfigGroup/innerTwo',
-        'nestedConfigGroup',
-      ];
+      const mockConfigGroupName = 'nestedConfigGroupAlt';
 
-      const expectedFilesForInnerConfigGroup = [
-        'config.toml',
-        'example.ts',
-        'sample.txt',
-        'test.html',
-        'config.yaml', // Within a directory within the nested config group
-        'user.css', // Within a directory within the nested config group
-      ];
+      const mockDestinationsRecordForTopLevelConfigGroup = {
+        [ALL_FILES_CHAR]: '$HOME/.mock/topLevel',
+      };
 
-      const expectedFilesForOuterConfigGroup = [
-        'example.js',
-        'sample.rs',
-        'test.ts',
-        '.configrc',
-        'example.py',
-        'sample.cc',
-        'test.md',
-        '.xresources',
-      ];
+      const mockDestinationsRecordForNestedConfigGroup = {
+        [ALL_FILES_CHAR]: '$HOME/.mock/nested',
+      };
 
-      // Act
-      const {
-        errors,
-        output: actualCmdOutput,
-        forTest: configGroups,
-      } = await linkCmd(mockConfigGroupNames);
+      const nestedDirName = 'inner';
+      const nestedConfigGroupName = 'innerConfigGroup';
+      const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
-      const defaultDestinationPathForInnerConfigGroupFiles =
-        configGroups[0].destinationRecord[ALL_FILES_CHAR];
-
-      const destinationPathsForInnerConfigGroup =
-        getDestinationPathsFromConfigGroups([configGroups[0]]);
-
-      const filesForInnerConfigGroup = pipe(
-        destinationPathsForInnerConfigGroup,
-        A.map(destPath => path.basename(destPath))
-      );
-      const filesForOuterConfigGroup = pipe(
-        [configGroups[1]],
-        getDestinationPathsFromConfigGroups,
-        A.map(destPath => path.basename(destPath))
+      const mockConfigGroupSetupTask = pipe(
+        [
+          pipe(
+            generateConfigGroupStructure(
+              generateConfigGroupEntityPath(nestedConfigGroupName)
+            ),
+            createDirIfItDoesNotExist
+          ),
+          pipe(
+            generateConfigGroupStructure(
+              generateConfigGroupEntityPath(nestedDirName)
+            ),
+            createDirIfItDoesNotExist
+          ),
+          pipe(
+            generateConfigGroupStructure(
+              generateConfigGroupEntityPath(
+                path.join(nestedConfigGroupName, nestedDirName)
+              )
+            ),
+            createDirIfItDoesNotExist
+          ),
+        ],
+        T.sequenceArray
       );
 
-      const doAllDestinationSymlinksForInnerConfigGroupFiles = await pipe(
-        destinationPathsForInnerConfigGroup,
-        T.traverseArray(destinationPath => () => isSymlink(destinationPath)),
-        T.map(concatAll(MonoidAll))
-      )();
+      const _topLevelConfigGroupFileNames = ['sample.js', 'example.rs', 'test.py'];
 
-      const doAllDestinationPathsForInnerConfigGroupFilesPointToTheDefault = pipe(
-        destinationPathsForInnerConfigGroup,
-        A.map(path.dirname),
-        A.every(destPath =>
-          S.Eq.equals(defaultDestinationPathForInnerConfigGroupFiles, destPath)
+      const topLevelInnerConfigGroupFileNames = pipe(
+        ['index.html', 'test.rs', 'example.md'],
+        A.map(filename => path.join(nestedDirName, filename))
+      );
+
+      const _nestedConfigGroupFileNames = pipe(
+        ['sample.rs', 'index.ts', 'user.md'],
+        A.map(filename => path.join(nestedConfigGroupName, filename))
+      );
+
+      const nestedInnerConfigGroupFileNames = pipe(
+        ['inner.js', 'app.ts', 'readme.md'],
+        A.map(filename => path.join(nestedConfigGroupName, nestedDirName, filename))
+      );
+
+      const allConfigGroupFileNames = [
+        ..._topLevelConfigGroupFileNames,
+        ..._nestedConfigGroupFileNames,
+        ...topLevelInnerConfigGroupFileNames,
+        ...nestedInnerConfigGroupFileNames,
+      ];
+
+      const mockConfigGroupFilesCreationTask = pipe(
+        allConfigGroupFileNames,
+        T.traverseArray(
+          compose(createConfigGroupFile, generateConfigGroupEntityPath)
         )
       );
 
+      const mockTopLevelConfigGroupDestinationRecordCreationTask =
+        createConfigGroupFile(
+          generateConfigGroupEntityPath(CONFIG_GRP_DEST_RECORD_FILE_NAME),
+          JSON.stringify(mockDestinationsRecordForTopLevelConfigGroup)
+        );
+
+      const mockNestedConfigGroupDestinationRecordCreationTask =
+        createConfigGroupFile(
+          generateConfigGroupEntityPath(
+            path.join(nestedConfigGroupName, CONFIG_GRP_DEST_RECORD_FILE_NAME)
+          ),
+          JSON.stringify(mockDestinationsRecordForNestedConfigGroup)
+        );
+
+      await mockConfigGroupSetupTask();
+      await mockConfigGroupFilesCreationTask();
+      await mockNestedConfigGroupDestinationRecordCreationTask();
+      await mockTopLevelConfigGroupDestinationRecordCreationTask();
+
+      // Act
+      const { errors, forTest: configGroups } = await linkCmd([
+        mockConfigGroupName,
+        `${mockConfigGroupName}/${nestedConfigGroupName}`,
+      ]);
+
+      const nestedConfigGroupFileNames = getFileNamesFromConfigGroups([
+        configGroups[1],
+      ]);
+
+      const topLevelConfigGroupFileNames = getFileNamesFromConfigGroups([
+        configGroups[0],
+      ]);
+
+      const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+
+      const allFilesExistAtTheirDestinationPaths = await checkIfAllPathsAreValid(
+        destinationPaths
+      )();
+
       // Assert
-      expect(errors).toEqual([]);
-      expect(doAllDestinationSymlinksForInnerConfigGroupFiles).toBeTruthy();
+      expect(errors).toBeEmpty();
+      expect(allFilesExistAtTheirDestinationPaths).toBeTrue();
 
-      expect(
-        doAllDestinationPathsForInnerConfigGroupFilesPointToTheDefault
-      ).toBeTruthy();
-
-      expect(filesForInnerConfigGroup).toIncludeAllMembers(
-        expectedFilesForInnerConfigGroup
-      );
-
-      expect(filesForOuterConfigGroup).toIncludeAllMembers(
-        expectedFilesForOuterConfigGroup
-      );
-
-      expect(actualCmdOutput.length).toBeGreaterThanOrEqual(
-        mockConfigGroupNames.length
-      );
-
-      expect(filesForOuterConfigGroup).not.toIncludeAllMembers(
-        filesForInnerConfigGroup
+      expect(topLevelConfigGroupFileNames).not.toIncludeSameMembers(
+        nestedConfigGroupFileNames
       );
     });
   });
