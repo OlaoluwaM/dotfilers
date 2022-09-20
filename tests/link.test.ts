@@ -43,8 +43,7 @@ import {
   getFileNamesFromConfigGroups,
   getIgnoredFilesFromConfigGroups,
   getNonIgnoredFilesFromConfigGroups,
-  getDestinationPathsForConfigGroups,
-  getDestinationPathsFromConfigGroups,
+  getAllDestinationPathsFromConfigGroups,
 } from './helpers';
 
 const LINK_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/link`;
@@ -60,7 +59,7 @@ beforeAll(() => {
 });
 
 const createConfigGroupFile = createFile(MOCK_DOTS_DIR);
-const generateConfigGroupStructure = generatePath(MOCK_DOTS_DIR);
+const generateConfigGroupStructurePath = generatePath(MOCK_DOTS_DIR);
 
 function getSourceAndDestinationPathsFromFileObj(configGroupFileObj: File) {
   return [
@@ -79,7 +78,7 @@ describe('Tests for the happy path', () => {
       VALID_MOCK_CONFIG_GRP_NAMES
     );
 
-    const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+    const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
     const doAllDestinationSymlinksExist = await pipe(
       destinationPaths,
@@ -103,7 +102,7 @@ describe('Tests for the happy path', () => {
         VALID_MOCK_CONFIG_GRP_NAMES
       );
 
-      const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+      const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
       const doAllDestinationSymlinksExist = await pipe(
         destinationPaths,
@@ -162,7 +161,7 @@ describe('Tests for the happy path', () => {
         [mockOptions]
       );
 
-      const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+      const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
       const doAllDestinationFilesExist = await checkIfAllPathsAreValid(
         destinationPaths
@@ -182,7 +181,7 @@ describe('Tests for the happy path', () => {
       ['-H', '--copy']
     );
 
-    const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+    const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
     const doAllDestinationSymlinksExist = await pipe(
       destinationPaths,
@@ -211,7 +210,7 @@ describe('Tests for the happy path', () => {
       // Act
       const { errors, forTest: configGroups } = await linkCmd([], mockOptions);
 
-      const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+      const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
       const doAllDestinationPathsExist = await checkIfAllPathsAreValid(
         destinationPaths
@@ -303,7 +302,7 @@ describe('Tests for the happy path', () => {
     const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
     const mockConfigGroupSetupTask = pipe(
-      generateConfigGroupStructure(mockConfigGroupName),
+      generateConfigGroupStructurePath(mockConfigGroupName),
       createDirIfItDoesNotExist
     );
 
@@ -330,7 +329,7 @@ describe('Tests for the happy path', () => {
       defaultDestinationPathShellStr
     );
 
-    const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+    const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
     const doAllDestinationSymlinksExist = await pipe(
       destinationPaths,
@@ -363,7 +362,7 @@ describe('Tests for the happy path', () => {
       // Act
       const { errors, forTest: configGroups } = await linkCmd(mockConfigGroupNames);
 
-      const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+      const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
       const doAllDestinationSymlinksExist = await pipe(
         destinationPaths,
@@ -398,7 +397,7 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructure(mockConfigGroupName),
+        generateConfigGroupStructurePath(mockConfigGroupName),
         createDirIfItDoesNotExist
       );
 
@@ -429,7 +428,7 @@ describe('Tests for the happy path', () => {
         matchingGlobDestinationPathShellStr
       );
 
-      const destinationPaths = getDestinationPathsFromConfigGroups(configGroups);
+      const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
       const doAllDestinationPathsPointToTheSameDir = pipe(
         destinationPaths,
@@ -462,7 +461,7 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructure(mockConfigGroupName),
+        generateConfigGroupStructurePath(mockConfigGroupName),
         createDirIfItDoesNotExist
       );
 
@@ -506,7 +505,7 @@ describe('Tests for the happy path', () => {
       );
 
       const destinationPathsForAllFiles =
-        getDestinationPathsForConfigGroups(configGroups);
+        getAllDestinationPathsFromConfigGroups(configGroups);
 
       const directFileNameDestinationPathsWereChosenOverGlobDestPaths = pipe(
         destinationPathsOfTargetedFiles,
@@ -537,7 +536,7 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructure(generateConfigGroupEntityPath(nestedDirName)),
+        generateConfigGroupStructurePath(generateConfigGroupEntityPath(nestedDirName)),
         createDirIfItDoesNotExist
       );
 
@@ -615,7 +614,7 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructure(
+        generateConfigGroupStructurePath(
           generateConfigGroupEntityPath(nestedDirNameInMockConfigGroup)
         ),
         createDirIfItDoesNotExist
@@ -647,7 +646,7 @@ describe('Tests for the happy path', () => {
 
       const configGroupFileNames = getFileNamesFromConfigGroups(configGroups);
 
-      const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+      const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
       const defaultFileDestinationPath = expandShellVariablesInString(
         mockDestinationPathShellStr
@@ -689,7 +688,7 @@ describe('Tests for the happy path', () => {
         const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
         const mockConfigGroupSetupTask = pipe(
-          generateConfigGroupStructure(generateConfigGroupEntityPath(nestedDirName)),
+          generateConfigGroupStructurePath(generateConfigGroupEntityPath(nestedDirName)),
           createDirIfItDoesNotExist
         );
 
@@ -725,7 +724,8 @@ describe('Tests for the happy path', () => {
         );
 
         const fileRecord = fileRecordLens.get(configGroups[0]);
-        const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+        const destinationPaths =
+          getAllDestinationPathsFromConfigGroups(configGroups);
 
         const expectedDestinationPathForNestedFiles = expandShellVariablesInString(
           nestedFileDestinationPathShellStr
@@ -749,7 +749,7 @@ describe('Tests for the happy path', () => {
       }
     );
 
-    test('Should ensure that the link command supports deeply nested config groups', async () => {
+    test('Should ensure that the link command supports deeply nested files within config groups', async () => {
       // Arrange
       const mockConfigGroupName = 'deeplyNested';
       const nestedFileDestinationPathShellStr = '~/rust/sample';
@@ -762,7 +762,7 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructure(generateConfigGroupEntityPath(nestedDirName)),
+        generateConfigGroupStructurePath(generateConfigGroupEntityPath(nestedDirName)),
         createDirIfItDoesNotExist
       );
 
@@ -796,7 +796,7 @@ describe('Tests for the happy path', () => {
         nestedFileDestinationPathShellStr
       );
 
-      const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+      const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
       const nestedFilesPointToTheExpectedDestinationPath = pipe(
         destinationPaths,
@@ -825,7 +825,7 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructure(generateConfigGroupEntityPath(nestedDirName)),
+        generateConfigGroupStructurePath(generateConfigGroupEntityPath(nestedDirName)),
         createDirIfItDoesNotExist
       );
 
@@ -897,7 +897,7 @@ describe('Tests for the happy path', () => {
         const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
         const mockConfigGroupSetupTask = pipe(
-          generateConfigGroupStructure(
+          generateConfigGroupStructurePath(
             generateConfigGroupEntityPath(nestedConfigGroupName)
           ),
           createDirIfItDoesNotExist
@@ -949,7 +949,7 @@ describe('Tests for the happy path', () => {
 
         const fileNames = getFileNamesFromConfigGroups(configGroups);
         const nestedConfigGroupDestinationPaths =
-          getDestinationPathsForConfigGroups(configGroups);
+          getAllDestinationPathsFromConfigGroups(configGroups);
         const expectedDestPathForAllFilesInNestedConfigGroup =
           expandShellVariablesInString(nestedConfigGroupDefaultDestPathShellStr);
 
@@ -997,19 +997,19 @@ describe('Tests for the happy path', () => {
       const mockConfigGroupSetupTask = pipe(
         [
           pipe(
-            generateConfigGroupStructure(
+            generateConfigGroupStructurePath(
               generateConfigGroupEntityPath(nestedConfigGroupName)
             ),
             createDirIfItDoesNotExist
           ),
           pipe(
-            generateConfigGroupStructure(
+            generateConfigGroupStructurePath(
               generateConfigGroupEntityPath(nestedDirName)
             ),
             createDirIfItDoesNotExist
           ),
           pipe(
-            generateConfigGroupStructure(
+            generateConfigGroupStructurePath(
               generateConfigGroupEntityPath(
                 path.join(nestedConfigGroupName, nestedDirName)
               )
@@ -1084,7 +1084,7 @@ describe('Tests for the happy path', () => {
         configGroups[0],
       ]);
 
-      const destinationPaths = getDestinationPathsForConfigGroups(configGroups);
+      const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
       const allFilesExistAtTheirDestinationPaths = await checkIfAllPathsAreValid(
         destinationPaths

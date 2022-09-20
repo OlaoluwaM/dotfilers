@@ -10,7 +10,7 @@ import { describe, test, expect } from '@jest/globals';
 import { globby, $, fs as fsExtra } from 'zx';
 import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants';
 import { default as readdirp, ReaddirpOptions } from 'readdirp';
-import { getRelativePathWithoutLeadingPathSeparator } from '@utils/index';
+import { getRelativePathWithoutLeadingPathSeparator } from './helpers';
 
 describe('Learning tests to verify behavior of globby package', () => {
   test("That globby doesn't error, but instead returns an empty array on no match", async () => {

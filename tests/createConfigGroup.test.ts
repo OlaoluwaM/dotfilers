@@ -1,3 +1,5 @@
+/* globals expect, describe, test, beforeAll */
+
 import * as A from 'fp-ts/lib/Array';
 import * as T from 'fp-ts/lib/Task';
 import * as RA from 'fp-ts/lib/ReadonlyArray';
@@ -7,11 +9,10 @@ import path from 'path';
 import { rm } from 'fs/promises';
 import { pipe } from 'fp-ts/lib/function';
 import { fs as fsExtra } from 'zx';
-import { defaultDestRecordEq } from './helpers';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { default as createConfigGroupCmd } from '@cmds/createConfigGroup';
 import { DEFAULT_DEST_RECORD_FILE_CONTENTS } from '@app/configGroup';
-import { describe, test, expect, beforeAll } from '@jest/globals';
+import { defaultDestRecordEq, generatePath } from './helpers';
 import {
   ExitCodes,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
@@ -20,10 +21,14 @@ import {
 
 const CMD_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/create-config-grp`;
 
+const MOCK_DOTS_DIR = `${CMD_TEST_DATA_DIR}/mock-dots`;
+
 beforeAll(() => {
-  process.env.DOTS = `${CMD_TEST_DATA_DIR}/mock-dots`;
-  process.env.DOTFILES = `${CMD_TEST_DATA_DIR}/mock-dots`;
+  process.env.DOTS = MOCK_DOTS_DIR;
+  process.env.DOTFILES = MOCK_DOTS_DIR;
 });
+
+const generateConfigGroupStructurePath = generatePath(MOCK_DOTS_DIR);
 
 function diffDestinationRecordFile(pathToDestinationRecord: string) {
   return async () => {
@@ -39,7 +44,7 @@ function diffDestinationRecordFile(pathToDestinationRecord: string) {
 async function removeDirs(dirNames: string[]) {
   return await pipe(
     dirNames,
-    A.map(dirName => path.join(CMD_TEST_DATA_DIR, 'mock-dots', dirName)),
+    A.map(generateConfigGroupStructurePath),
     T.traverseArray(dirPath => () => rm(dirPath, { force: true, recursive: true }))
   )();
 }
@@ -60,7 +65,6 @@ describe('Tests for the happy path', () => {
       const {
         errors,
         warnings,
-        output: cmdOutput,
         forTest: configGroupDirPaths,
       } = await createConfigGroupCmd(
         nonExistingConfigGroupNames.concat(NAMES_OF_EXISTING_CONFIG_GRPS)
@@ -70,7 +74,7 @@ describe('Tests for the happy path', () => {
         configGroupDirPaths,
         T.traverseArray(configGroupDirPath =>
           pipe(
-            `${configGroupDirPath}/${CONFIG_GRP_DEST_RECORD_FILE_NAME}`,
+            path.join(configGroupDirPath, CONFIG_GRP_DEST_RECORD_FILE_NAME),
             diffDestinationRecordFile
           )
         ),
@@ -79,20 +83,47 @@ describe('Tests for the happy path', () => {
       )();
 
       // Assert
-      expect(errors).toEqual([]);
-      expect(warnings?.length).toBe(NAMES_OF_EXISTING_CONFIG_GRPS.length);
+      expect(errors).toBeEmpty();
+      expect(warnings).toBeArrayOfSize(NAMES_OF_EXISTING_CONFIG_GRPS.length);
       expect(numOfCreatedConfigGroups).toBe(nonExistingConfigGroupNames.length);
-      expect(cmdOutput.length).toBeGreaterThanOrEqual(
-        nonExistingConfigGroupNames.length
-      );
 
       // Cleanup
-      process.env[envVarName] = `${CMD_TEST_DATA_DIR}/mock-dots`;
+      process.env[envVarName] = MOCK_DOTS_DIR;
       await removeDirs(nonExistingConfigGroupNames);
     }
   );
 
-  test.todo('Can I create a nested config group?');
+  test('Should ensure that the createConfigGroup command can create nested config groups', async () => {
+    // Arrange
+    const nameOfMockNestedConfigGroup = 'bat/inner';
+    const expectedPathToNestedConfigGroup = generateConfigGroupStructurePath(
+      nameOfMockNestedConfigGroup
+    );
+
+    // Act
+    const {
+      errors,
+      warnings,
+      forTest: configGroupDirPaths,
+    } = await createConfigGroupCmd([nameOfMockNestedConfigGroup]);
+
+    const nestedConfigGroupHasValidDefaultDestinationRecordFile = await pipe(
+      path.join(expectedPathToNestedConfigGroup, CONFIG_GRP_DEST_RECORD_FILE_NAME),
+      diffDestinationRecordFile
+    )();
+
+    // Assert
+    expect(errors).toBeEmpty();
+    expect(warnings).toBeEmpty();
+    expect(nestedConfigGroupHasValidDefaultDestinationRecordFile).toBeTrue();
+
+    expect(configGroupDirPaths).toIncludeSameMembers([
+      expectedPathToNestedConfigGroup,
+    ]);
+
+    // Cleanup
+    await removeDirs([nameOfMockNestedConfigGroup]);
+  });
 });
 
 describe('Tests for everything but the happy path', () => {
@@ -130,11 +161,12 @@ describe('Tests for everything but the happy path', () => {
     } = await createConfigGroupCmd(mockConfigGroupNames);
 
     // Assert
-    expect([warnings, cmdOutput]).toEqual([[], []]);
-    expect(errors.length).toBe(mockConfigGroupNames.length);
+    expect(errors).toBeArrayOfSize(mockConfigGroupNames.length);
+    expect(warnings).toBeEmpty();
+    expect(cmdOutput).toBeEmpty();
 
     // Cleanup
-    process.env.DOTS = `${CMD_TEST_DATA_DIR}/mock-dots`;
-    process.env.DOTFILES = `${CMD_TEST_DATA_DIR}/mock-dots`;
+    process.env.DOTS = MOCK_DOTS_DIR;
+    process.env.DOTFILES = MOCK_DOTS_DIR;
   });
 });
