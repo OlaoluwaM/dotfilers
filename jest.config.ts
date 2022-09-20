@@ -27,7 +27,7 @@ const config: Config.InitialOptions = {
   testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)'],
   collectCoverageFrom,
   testPathIgnorePatterns,
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  setupFilesAfterEnv: ['jest-extended/all', '<rootDir>/tests/setup.ts'],
   transform: {},
   extensionsToTreatAsEsm: ['.ts'],
   globals: {

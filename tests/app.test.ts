@@ -1,8 +1,7 @@
 import { map } from 'ramda';
-import { NOT_FOUND } from '../src/constants';
 import { array, string } from 'fp-ts';
 import { describe, test, expect } from '@jest/globals';
-import { replaceShellVarsInString } from '../src/app/helpers';
+import { replaceShellVarsInString, NOT_FOUND } from '@lib/shellVarStrExpander';
 
 describe('Test for helpers', () => {
   test('Should ensure that it is possible to expand shell variables in strings to their original values', () => {

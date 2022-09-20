@@ -1,24 +1,21 @@
 import * as A from 'fp-ts/lib/Array';
+import * as IO from 'fp-ts/lib/IO';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
-import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import boxen from 'boxen';
 
 import { pipe } from 'fp-ts/lib/function';
-import { MonoidAll } from 'fp-ts/lib/boolean';
-import { filter as recordFilter } from 'fp-ts/lib/Record';
-import { chalk, fs as fsExtra, globby } from 'zx';
-import { AnyObject, Primitive, RawFile } from '@types';
-import { CONFIG_GRP_DEST_MAP_FILE_NAME } from '../constants';
+import { isEmpty, slice } from 'ramda';
+import { chalk, fs as fsExtra } from 'zx';
+import { DestinationPath, SourcePath } from '@types';
+import { copyFile, link, symlink, unlink } from 'fs/promises';
 import {
   AggregateError,
-  getErrorMessagesFromAggregateErr,
   newAggregateError,
+  getErrorMessagesFromAggregateErr,
 } from './AggregateError';
-import { not, isEmpty, slice, lensProp, view } from 'ramda';
-import { mkdir, unlink, link, symlink, readdir } from 'fs/promises';
 
 export function getCLIArguments(startingInd: number) {
   return slice(startingInd, Infinity)(process.argv);
@@ -31,10 +28,6 @@ export function trace<T>(...logContents: string[]) {
     console.log(...otherLogContents, val);
     return val;
   };
-}
-
-export function id<T>(value: T) {
-  return value;
 }
 
 export function doesPathExist(
@@ -51,18 +44,6 @@ export function doesPathExist(
   );
 }
 
-export function getAllFilesFromDirectory(dirPath: string): T.Task<RawFile[]> {
-  return async () =>
-    (await globby('**/*', {
-      ignore: [CONFIG_GRP_DEST_MAP_FILE_NAME],
-      onlyFiles: true,
-      cwd: dirPath,
-      absolute: true,
-      objectMode: true,
-      dot: true,
-    })) as unknown as RawFile[];
-}
-
 export function readJson<T>(jsonFilePath: string): TE.TaskEither<AggregateError, T> {
   return TE.tryCatch(
     (() => fsExtra.readJson(jsonFilePath)) as () => Promise<T>,
@@ -72,22 +53,6 @@ export function readJson<T>(jsonFilePath: string): TE.TaskEither<AggregateError,
 
 export function getOnlyValueFromEntriesArr<K, V>(entries: [K, V]): V {
   return entries[1];
-}
-
-type RawTypes =
-  | 'function'
-  | 'object'
-  | 'array'
-  | 'null'
-  | 'undefined'
-  | 'string'
-  | 'number'
-  | 'boolean';
-export function rawTypeOf(value: unknown): RawTypes {
-  return Object.prototype.toString
-    .call(value)
-    .replace(/\[|\]|object|\s/g, '')
-    .toLocaleLowerCase() as RawTypes;
 }
 
 export function removeEntityAt(
@@ -103,34 +68,6 @@ export function removeEntityAt(
         `Error deleting entity at path ${filePath}: ${(reason as Error).message}`
       )
   );
-}
-
-export function createEntityPathIfItDoesNotExist(
-  entityPath: string
-): T.Task<boolean> {
-  return pipe(
-    doesPathExist(entityPath),
-    TE.fold(
-      () => async () => {
-        // Because recursive is set to true, the following will not fail, no need for try catch
-        // https://nodejs.org/docs/v18.7.0/api/fs.html#fspromisesunlinkpath
-        await mkdir(entityPath, { recursive: true });
-        return true;
-      },
-      () => T.of(false)
-    )
-  );
-}
-
-export function filterFalsyProps<ObjT extends AnyObject<any>>(obj: ObjT) {
-  const filterFn = recordFilter((keyVal: boolean) => MonoidAll.concat(true, keyVal));
-  return filterFn(obj) as ObjT;
-}
-
-export function isNotEmptyObj<Obj extends AnyObject<any>>(
-  potentiallyEmptyObj: Obj
-): boolean {
-  return pipe(potentiallyEmptyObj, isEmpty, not);
 }
 
 export function logErrors(errors: AggregateError[]): IO.IO<void> {
@@ -179,9 +116,13 @@ export function logOutput(outputMsgs: string[]): IO.IO<void> {
   };
 }
 
-type FsTask = (sourcePath: string, destinationPath: string) => Promise<void>;
+type FsTask = (
+  sourcePath: SourcePath,
+  destinationPath: DestinationPath
+) => Promise<void>;
+
 function withDeleteFirst(fn: FsTask): FsTask {
-  return async (sourcePath: string, destinationPath: string) => {
+  return async (sourcePath, destinationPath) => {
     try {
       await unlink(destinationPath);
     } catch {
@@ -192,36 +133,11 @@ function withDeleteFirst(fn: FsTask): FsTask {
   };
 }
 
-export const symlinkWithDeleteFirst = withDeleteFirst(symlink);
-export const hardlinkWithDeleteFirst = withDeleteFirst(link);
+export const deleteThenSymlink = withDeleteFirst(symlink);
+export const deleteThenHardlink = withDeleteFirst(link);
+export const normalizedCopy = async (src: SourcePath, dest: DestinationPath) =>
+  await copyFile(src, dest);
 
-export function getAllDirNamesAtFolderPath(folderPath: string) {
-  return TE.tryCatch(
-    async () => {
-      const folderContents = await readdir(folderPath, {
-        withFileTypes: true,
-      });
-
-      return pipe(
-        folderContents,
-        A.filter(
-          dirent => dirent.isDirectory() && isNotAHiddenDirectory(dirent.name)
-        ),
-        A.map(({ name: dirName }) => dirName)
-      );
-    },
-    reason => newAggregateError(reason as Error)
-  );
-}
-
-function isNotAHiddenDirectory(dirName: string) {
-  const HIDDEN_FOLDER_REGEX = /^\..*/;
-  return !HIDDEN_FOLDER_REGEX.test(dirName);
-}
-
-export function transformNonStringPrimitivesToStrings(
-  nonStringPrimitives: Primitive
-) {
-  if (typeof nonStringPrimitives === 'string') return nonStringPrimitives;
-  return '';
+export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
+  return async () => await fsExtra.ensureDir(dirPath);
 }

@@ -1,37 +1,56 @@
+import { EntryInfo } from 'readdirp';
 import { AggregateError } from '@utils/AggregateError';
-import { Entry } from 'fast-glob';
-import { Newtype } from 'newtype-ts';
-import { ALL_FILES_CHAR, EXCLUDE_KEY } from '../constants';
+import { Brand, createBrander } from '@lib/brand';
+import { NOT_FOUND, ALL_FILES_CHAR, EXCLUDE_KEY } from '../constants';
 
-export type RawFile = Omit<Entry, 'stats'>;
+export type RawFile = EntryInfo;
 
-export type File = Pick<RawFile, 'name' | 'path'> & {
+export type File = {
+  sourcePath: SourcePath;
+  name: string;
+  basename: string;
   ignore: boolean;
-  destinationPath: string;
+  destinationPath: DestinationPath;
 };
 
-export type Files = File[];
+export type PartialFile = isOptional<File, 'ignore' | 'destinationPath'>;
 
 export interface FileRecord {
   [key: string]: File;
 }
 
 export type DestinationRecord = {
-  readonly [key: string | typeof ALL_FILES_CHAR]: string;
-} & { readonly [EXCLUDE_KEY]?: string[] | typeof ALL_FILES_CHAR };
+  readonly [fileGlobAndPath: string]: DestinationPath;
+  readonly [NOT_FOUND]: null;
+} & {
+  readonly [ALL_FILES_CHAR]: DestinationPath;
+  readonly [EXCLUDE_KEY]: string[] | typeof ALL_FILES_CHAR;
+};
+
+export type DestinationRecordValue =
+  | DestinationRecord[typeof EXCLUDE_KEY]
+  | DestinationRecord[string];
 
 export type DestinationRecordWithoutIgnoreInfo = Omit<
   DestinationRecord,
   typeof EXCLUDE_KEY
 >;
 
+export type FixedDestinationRecordKeys = typeof ALL_FILES_CHAR | typeof EXCLUDE_KEY;
+
+export type PartialDestinationRecord = Record<string, DestinationRecordValue>;
+
+export type PartialConfigGroup = {
+  readonly files: PartialFile[];
+  readonly fileRecord: { [K in keyof FileRecord]: PartialFile };
+  readonly destinationRecord?: DestinationRecord;
+};
+
 export interface ConfigGroup {
-  readonly files: Files;
+  readonly files: File[];
   readonly fileRecord: FileRecord;
   readonly destinationRecord: DestinationRecord;
 }
-
-export type ConfigGroups = ConfigGroup[];
 
 export type Primitive = string | number | boolean | symbol;
 
@@ -49,11 +68,19 @@ export type isOptional<Structure, MemberUnion extends keyof Structure> = Omit<
 > &
   Partial<Pick<Structure, MemberUnion>>;
 
-export interface AbsFilePath
-  extends Newtype<{ readonly AbsFilePath: unique symbol }, string> {}
-
 export interface CmdResponse<T> {
   errors: AggregateError[] | string[];
+  warnings?: string[];
   output: string[];
   forTest: T; // NOTE: This return is for testing purposes only
 }
+
+export interface Cmd<RT> {
+  (args: string[], cliOptions: string[]): Promise<CmdResponse<RT>>;
+}
+
+export type SourcePath = Brand<string, 'Source Path'>;
+export type DestinationPath = Brand<string, 'Destination Path'>;
+
+export const toSourcePath = createBrander<SourcePath>();
+export const toDestinationPath = createBrander<DestinationPath>();

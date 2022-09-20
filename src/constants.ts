@@ -2,17 +2,17 @@ import { pipe } from 'fp-ts/lib/function';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-export const ALL_FILES_CHAR = '*';
+export const ALL_FILES_CHAR = 'all';
 
-export const EXCLUDE_KEY = '!' as const;
+export const EXCLUDE_KEY = 'exclude';
 
-export const CONFIG_GRP_DEST_MAP_FILE_NAME = 'destinations.json' as const;
+export const CONFIG_GRP_DEST_RECORD_FILE_NAME = 'destinations.json';
 
-export const NOT_FOUND = '$NOT_FOUND';
+export const NOT_FOUND = Symbol('$NOT_FOUND$');
 
 export const SHELL_VARS_TO_CONFIG_GRP_DIRS = ['$DOTFILES', '$DOTS'] as const;
 
-export const SHELL_VARS_TO_CONFIG_GRP_DIRS_STR = '$DOTFILES or $DOTS' as const;
+export const SHELL_VARS_TO_CONFIG_GRP_DIRS_STR = '$DOTFILES or $DOTS';
 
 // This isn't in the `utils` file to avoid a cyclic dependency error
 export function getAbsolutePathsForFile(fileUrl: string) {

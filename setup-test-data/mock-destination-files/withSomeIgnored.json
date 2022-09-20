@@ -1,5 +1,5 @@
 {
-  "!": ["navi.config.yaml", "navi.sample.json", "setup.yaml"],
+  "exclude": ["navi.config.yaml", "navi.sample.json", "setup.yaml"],
   "navi.script.sh": "~/.config/navi/script",
   "setup.yaml": "~/.config/navi/setup"
 }

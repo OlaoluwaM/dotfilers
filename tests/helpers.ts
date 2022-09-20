@@ -1,19 +1,22 @@
 import * as A from 'fp-ts/lib/Array';
-import * as O from 'fp-ts/lib/Option';
+import * as R from 'fp-ts/lib/Record';
+import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
+import * as L from 'monocle-ts/Lens';
+import * as MT from 'monocle-ts/Traversal';
+import * as Eq from 'fp-ts/lib/Eq';
 
-import { flow, pipe } from 'fp-ts/lib/function';
+import path from 'path';
+
+import { values } from 'ramda';
+import { MonoidAll } from 'fp-ts/lib/boolean';
 import { concatAll } from 'fp-ts/lib/Monoid';
-import { ConfigGroup, ConfigGroups, File } from '@types';
-import { stat, lstat } from 'fs/promises';
 import { fs as fsExtra } from 'zx';
-import { MonoidAll, MonoidAny } from 'fp-ts/lib/boolean';
-import { id } from '@utils/index';
-import { compose, lensProp, view } from 'ramda';
-import { getFilesFromConfigGrp, isNotIgnored } from '@app/configGrpOps';
-import { not } from 'fp-ts/lib/Predicate';
+import { flow, identity, pipe } from 'fp-ts/lib/function';
+import { lstat, stat, writeFile } from 'fs/promises';
+import { ConfigGroup, DestinationPath, File, SourcePath } from '@types';
 
-export async function isSymlink(filePath: string) {
+export async function isSymlink(filePath: DestinationPath) {
   try {
     const fileStat = await lstat(filePath);
 
@@ -24,8 +27,8 @@ export async function isSymlink(filePath: string) {
 }
 
 export async function isHardlink(
-  originalFilePath: string,
-  potentialHardlinkFilePath: string
+  originalFilePath: SourcePath,
+  potentialHardlinkFilePath: DestinationPath
 ) {
   try {
     const fileStats = await Promise.all(
@@ -41,47 +44,96 @@ export async function isHardlink(
 }
 
 export async function doesPathExist(pathToEntity: string) {
-  const pathExists = await fsExtra.pathExists(pathToEntity);
-  return pathExists;
+  return await fsExtra.pathExists(pathToEntity);
 }
 
 export const checkIfAllPathsAreValid = flow(
-  id<string[]>,
-  A.map(destinationPath => () => doesPathExist(destinationPath as string)),
-  T.sequenceArray,
+  identity<DestinationPath[]>,
+  T.traverseArray(destinationPath => () => doesPathExist(destinationPath)),
   T.map(concatAll(MonoidAll))
 );
 
-export const getDestinationPathsFromConfigGrp = flow(
-  id<ConfigGroups>,
-  A.map(compose(A.map(getDestinationPathFromFileObj), getFilesFromConfigGrp)),
-  A.flatten
-);
-
-export function getDestinationPathFromFileObj(configGrpFileObj: File) {
-  const destinationPathLens = lensProp<File, 'destinationPath'>('destinationPath');
-  return view(destinationPathLens, configGrpFileObj);
+function removeLeadingPathSeparator(dirPath: string) {
+  const leadingPathSeparatorRegex = new RegExp(`^${path.sep}+`);
+  return S.replace(leadingPathSeparatorRegex, '')(dirPath);
 }
 
-export function getDestinationPathsOfIgnoredFiles(configGrps: ConfigGroups) {
-  return pipe(
-    configGrps,
-    A.map(
-      compose(
-        A.filterMap(getDestinationPathsOfIgnoredFileObjs),
-        getFilesFromConfigGrp
-      )
-    ),
-    A.flatten
-  );
+export function getRelativePathWithoutLeadingPathSeparator(rootPath: string) {
+  return (fullPath: string) =>
+    pipe(fullPath, S.replace(rootPath, ''), removeLeadingPathSeparator);
 }
-
-const getDestinationPathsOfIgnoredFileObjs = flow(
-  id<File>,
-  O.fromPredicate(not(isNotIgnored)),
-  O.map(getDestinationPathFromFileObj)
-);
 
 export const manualFail = (v: any) => {
   throw new Error(`Manual fail: ${v}`);
 };
+
+export const defaultDestRecordEq = Eq.struct({
+  '!': S.Eq,
+});
+
+export function createFile(rootPath: string) {
+  return (fileName: string, content: string = ''): T.Task<void> =>
+    async () =>
+      await writeFile(path.join(rootPath, fileName), content, { encoding: 'utf-8' });
+}
+
+export function generatePath(rootPath: string) {
+  return (entityName: string) => path.join(rootPath, entityName);
+}
+
+export const filenameLens = pipe(L.id<File>(), L.prop('name'));
+export const fileBasenameLens = pipe(L.id<File>(), L.prop('basename'));
+export const sourcePathLens = pipe(L.id<File>(), L.prop('sourcePath'));
+export const destinationPathLens = pipe(L.id<File>(), L.prop('destinationPath'));
+export const fileRecordLens = pipe(L.id<ConfigGroup>(), L.prop('fileRecord'));
+
+const fileObjLens = pipe(L.id<ConfigGroup>(), L.prop('files'));
+
+export const getIgnoredFilesFromConfigGroups = (configGroups: ConfigGroup[]) =>
+  pipe(
+    configGroups,
+    A.chain(fileObjLens.get),
+    A.filter(({ ignore }) => ignore === true)
+  );
+
+export const getNonIgnoredFilesFromConfigGroups = (configGroups: ConfigGroup[]) =>
+  pipe(
+    configGroups,
+    A.chain(fileObjLens.get),
+    A.filter(({ ignore }) => ignore === false)
+  );
+
+const destinationPathLensFromConfigGroup = pipe(
+  fileObjLens,
+  L.asTraversal,
+  MT.traverse(A.Traversable),
+  MT.prop('destinationPath')
+);
+
+const fileTraversable = pipe(MT.id<File[]>(), MT.traverse(A.Traversable));
+
+export const getFileNamesFromFiles = (files: File[]) =>
+  MT.getAll(files)(pipe(fileTraversable, MT.prop('name'))) as string[];
+
+export const getDestinationPathsFromFiles = (files: File[]) =>
+  MT.getAll(files)(
+    pipe(fileTraversable, MT.prop('destinationPath'))
+  ) as DestinationPath[];
+
+export const getDestinationPathsOfIgnoredFiles = flow(
+  getIgnoredFilesFromConfigGroups,
+  getDestinationPathsFromFiles
+);
+
+const getDestinationPathsForConfigGroup = (configGroup: ConfigGroup) =>
+  MT.getAll(configGroup)(destinationPathLensFromConfigGroup) as DestinationPath[];
+
+export const getAllDestinationPathsFromConfigGroups = (
+  configGroups: ConfigGroup[]
+) => pipe(configGroups, A.chain(getDestinationPathsForConfigGroup));
+
+const getFileNamesFromConfigGroup = (configGroup: ConfigGroup) =>
+  pipe(fileRecordLens.get(configGroup), R.map(filenameLens.get), values);
+
+export const getFileNamesFromConfigGroups = (configGroups: ConfigGroup[]) =>
+  pipe(configGroups, A.chain(getFileNamesFromConfigGroup));

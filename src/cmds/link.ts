@@ -3,36 +3,37 @@ import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
-import parseCliArgs from '@lib/minimal-argp';
+import parseCliArgs from '@lib/minimal-argp/index';
 
 import { pipe } from 'fp-ts/lib/function';
-import { chalk } from 'zx';
 import { match, P } from 'ts-pattern';
-import { copyFile } from 'fs/promises';
 import { ExitCodes } from '../constants';
-import { newAggregateError } from '../utils/AggregateError';
+import { newAggregateError } from '@utils/AggregateError';
 import {
   isNotIgnored,
-  getFilesFromConfigGrp,
-  default as createConfigGrps,
-} from '@app/configGrpOps';
+  getFilesFromConfigGroup,
+  default as createConfigGroups,
+} from '@app/configGroup';
 import {
-  symlinkWithDeleteFirst,
-  hardlinkWithDeleteFirst,
-  createEntityPathIfItDoesNotExist,
-} from '../utils/index';
-import {
-  File,
-  CmdResponse,
-  ConfigGroups,
-  LinkCmdOperationType,
-} from '../types/index';
+  normalizedCopy,
+  deleteThenSymlink,
+  deleteThenHardlink,
+  createDirIfItDoesNotExist,
+} from '@utils/index';
 import {
   exitCli,
   exitCliWithCodeOnly,
   linkOperationTypeToPastTense,
-  optionallyGetAllConfigGrpNamesInExistence,
+  getPathsToAllConfigGroupDirsInExistence,
 } from '@app/helpers';
+import {
+  File,
+  SourcePath,
+  CmdResponse,
+  ConfigGroup,
+  DestinationPath,
+  LinkCmdOperationType,
+} from '@types';
 
 const linkCmdCliOptionsConfig = {
   options: {
@@ -51,19 +52,17 @@ export default async function main(
   passedArguments: string[],
   cliOptions: string[] = []
 ) {
-  const configGrpNames = A.isEmpty(passedArguments)
-    ? await optionallyGetAllConfigGrpNamesInExistence()
+  const configGroupNamesOrDirPaths = A.isEmpty(passedArguments)
+    ? await getPathsToAllConfigGroupDirsInExistence()
     : passedArguments;
 
-  const fatalErrMsg = chalk.red.bold(
-    'Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables? If so, then perhaps you have no configuration groups yet.'
-  );
-
   // eslint-disable-next-line no-return-await
-  const cmdOutput = await match(configGrpNames)
+  const cmdOutput = await match(configGroupNamesOrDirPaths)
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
-    .with({ _tag: 'None' }, () => exitCli(fatalErrMsg, ExitCodes.GENERAL))
-    .with({ _tag: 'Some' }, (_, some) => linkCmd(some.value, cliOptions))
+    .with({ _tag: 'Left' }, (_, { left }) =>
+      exitCli(left.message, ExitCodes.GENERAL)
+    )
+    .with({ _tag: 'Right' }, (_, { right }) => linkCmd(right, cliOptions))
     .with(P.array(P.string), (_, value) => linkCmd(value, cliOptions))
     .exhaustive();
 
@@ -71,25 +70,28 @@ export default async function main(
 }
 
 async function linkCmd(
-  configGrpNames: string[],
+  configGroupNamesOrDirPaths: string[],
   cliOptions: string[] = []
-): Promise<CmdResponse<ConfigGroups>> {
+): Promise<CmdResponse<ConfigGroup[]>> {
   const chosenLinkCmdOperationFn = pipe(
     cliOptions,
     parseCmdOptions,
     performChosenLinkCmdOperation
   );
 
-  const configGrpsWithErrors = await createConfigGrps(configGrpNames)();
-  const { left: configGrpCreationErrs, right: configGrps } = configGrpsWithErrors;
+  const configGroupsWithErrors = await createConfigGroups(
+    configGroupNamesOrDirPaths
+  )();
+  const { left: configGroupCreationErrs, right: configGroups } =
+    configGroupsWithErrors;
 
-  const operationFeedback = await chosenLinkCmdOperationFn(configGrps)();
+  const operationFeedback = await chosenLinkCmdOperationFn(configGroups)();
   const { left: operationErrors, right: operationOutput } = operationFeedback;
 
   return {
-    errors: [...configGrpCreationErrs, ...operationErrors],
+    errors: [...configGroupCreationErrs, ...operationErrors],
     output: operationOutput,
-    forTest: configGrps,
+    forTest: configGroups,
   };
 }
 
@@ -130,18 +132,17 @@ function determineLinkCmdOperationToPerform(
 function performChosenLinkCmdOperation(
   linkCmdOperationToPerform: LinkCmdOperationType
 ) {
-  return (configGrpObjs: ConfigGroups) => {
+  return (configGroups: ConfigGroup[]) => {
     const linkCmdOperationFn = createChosenLinkOperationFn(
       linkCmdOperationToPerform
     );
 
     return pipe(
-      configGrpObjs,
-      A.map(getFilesFromConfigGrp),
-      A.flatten,
+      configGroups,
+      A.chain(getFilesFromConfigGroup),
       A.filter<File>(isNotIgnored),
 
-      A.wilt(T.ApplicativePar)(({ path: sourcePath, destinationPath }) =>
+      A.wilt(T.ApplicativePar)(({ sourcePath, destinationPath }) =>
         linkCmdOperationFn(sourcePath, destinationPath)
       )
     );
@@ -149,20 +150,23 @@ function performChosenLinkCmdOperation(
 }
 
 function createChosenLinkOperationFn(linkOperationType: LinkCmdOperationType) {
-  return (pathToSourceEntity: string, destinationPath: string) =>
+  return (pathToSourceEntity: SourcePath, destinationPath: DestinationPath) =>
     TE.tryCatch(
       async () => {
         await pipe(
-          createEntityPathIfItDoesNotExist(path.dirname(destinationPath)),
+          createDirIfItDoesNotExist(path.dirname(destinationPath)),
+
           T.chain(
             () => () =>
               match(linkOperationType)
-                .with('copy', () => copyFile(pathToSourceEntity, destinationPath))
+                .with('copy', () =>
+                  normalizedCopy(pathToSourceEntity, destinationPath)
+                )
                 .with('hardlink', () =>
-                  hardlinkWithDeleteFirst(pathToSourceEntity, destinationPath)
+                  deleteThenHardlink(pathToSourceEntity, destinationPath)
                 )
                 .with('symlink', () =>
-                  symlinkWithDeleteFirst(pathToSourceEntity, destinationPath)
+                  deleteThenSymlink(pathToSourceEntity, destinationPath)
                 )
                 .exhaustive()
           )

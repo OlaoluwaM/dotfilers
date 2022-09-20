@@ -1,3 +1,5 @@
+import 'jest-extended';
+
 import path from 'path';
 
 import { $ } from 'zx';
