@@ -1,19 +1,16 @@
 import * as A from 'fp-ts/lib/Array';
+import * as IO from 'fp-ts/lib/IO';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
-import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
-import path from 'path';
 import boxen from 'boxen';
 
 import { pipe } from 'fp-ts/lib/function';
-import { MonoidAll } from 'fp-ts/lib/boolean';
-import { not, isEmpty, slice } from 'ramda';
+import { isEmpty, slice } from 'ramda';
 import { chalk, fs as fsExtra } from 'zx';
-import { filter as recordFilter } from 'fp-ts/lib/Record';
-import { mkdir, unlink, link, symlink, copyFile } from 'fs/promises';
-import { AnyObject, SourcePath, DestinationPath } from '@types';
+import { DestinationPath, SourcePath } from '@types';
+import { copyFile, link, symlink, unlink } from 'fs/promises';
 import {
   AggregateError,
   newAggregateError,
@@ -58,22 +55,6 @@ export function getOnlyValueFromEntriesArr<K, V>(entries: [K, V]): V {
   return entries[1];
 }
 
-type RawTypes =
-  | 'function'
-  | 'object'
-  | 'array'
-  | 'null'
-  | 'undefined'
-  | 'string'
-  | 'number'
-  | 'boolean';
-export function rawTypeOf(value: unknown): RawTypes {
-  return Object.prototype.toString
-    .call(value)
-    .replace(/\[|\]|object|\s/g, '')
-    .toLocaleLowerCase() as RawTypes;
-}
-
 export function removeEntityAt(
   filePath: string
 ): TE.TaskEither<AggregateError, string> {
@@ -87,34 +68,6 @@ export function removeEntityAt(
         `Error deleting entity at path ${filePath}: ${(reason as Error).message}`
       )
   );
-}
-
-export function createEntityPathIfItDoesNotExist(
-  entityPath: string
-): T.Task<boolean> {
-  return pipe(
-    doesPathExist(entityPath),
-    TE.fold(
-      () => async () => {
-        // Because recursive is set to true, the following will not fail, no need for try catch
-        // https://nodejs.org/docs/v18.7.0/api/fs.html#fspromisesunlinkpath
-        await mkdir(entityPath, { recursive: true });
-        return true;
-      },
-      () => T.of(false)
-    )
-  );
-}
-
-export function filterFalsyProps<ObjT extends AnyObject<any>>(obj: ObjT) {
-  const filterFn = recordFilter((keyVal: boolean) => MonoidAll.concat(true, keyVal));
-  return filterFn(obj) as ObjT;
-}
-
-export function isNotEmptyObj<Obj extends AnyObject<any>>(
-  potentiallyEmptyObj: Obj
-): boolean {
-  return pipe(potentiallyEmptyObj, isEmpty, not);
 }
 
 export function logErrors(errors: AggregateError[]): IO.IO<void> {
@@ -187,14 +140,4 @@ export const normalizedCopy = async (src: SourcePath, dest: DestinationPath) =>
 
 export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
   return async () => await fsExtra.ensureDir(dirPath);
-}
-
-export function removeLeadingPathSeparator(dirPath: string) {
-  const leadingPathSeparatorRegex = new RegExp(`^${path.sep}+`);
-  return S.replace(leadingPathSeparatorRegex, '')(dirPath);
-}
-
-export function getRelativePathWithoutLeadingPathSeparator(rootPath: string) {
-  return (fullPath: string) =>
-    pipe(fullPath, S.replace(rootPath, ''), removeLeadingPathSeparator);
 }
