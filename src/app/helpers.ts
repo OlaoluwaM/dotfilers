@@ -86,7 +86,7 @@ export const linkOperationTypeToPastTense: Record<LinkCmdOperationType, string> 
   symlink: 'symlinked',
 };
 
-export function getPathToDotfilesDir() {
+export function getPathToDotfilesDirPath() {
   return pipe(
     SHELL_VARS_TO_CONFIG_GRP_DIRS,
     RNEA.map(expandShellVariablesInString),
@@ -125,7 +125,7 @@ export function getAllConfigGroupDirPaths(): TE.TaskEither<Error, string[]> {
   return TE.tryCatch(async () => {
     const configGroupPaths = [] as string[];
 
-    const dotfilesDirPath = getPathToDotfilesDir();
+    const dotfilesDirPath = getPathToDotfilesDirPath();
     if (O.isNone(dotfilesDirPath)) {
       throw new Error('Could not find dotfiles directory');
     }
@@ -142,14 +142,14 @@ export function getAllConfigGroupDirPaths(): TE.TaskEither<Error, string[]> {
     }
 
     return configGroupPaths;
-  }, generateConfigGroupDirPathsRetrievalError());
+  }, getPathToDotfilesDirPathRetrievalError());
 }
 
-function generateConfigGroupDirPathsRetrievalError() {
+export function getPathToDotfilesDirPathRetrievalError() {
   return () =>
     new Error(
       chalk.bold.red(
-        'Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables? If so, then perhaps you have no configuration groups yet.'
+        `Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables (${SHELL_VARS_TO_CONFIG_GRP_DIRS})? If so, then perhaps you have no configuration groups yet.`
       )
     );
 }
