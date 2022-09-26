@@ -56,7 +56,6 @@ export default async function main(
     ? await getPathsToAllConfigGroupDirsInExistence()
     : passedArguments;
 
-  // eslint-disable-next-line no-return-await
   const cmdOutput = await match(configGroupNamesOrDirPaths)
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
     .with({ _tag: 'Left' }, (_, { left }) =>
