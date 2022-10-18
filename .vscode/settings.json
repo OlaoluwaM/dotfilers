@@ -17,6 +17,7 @@
     "RNEA",
     "spicetify",
     "tilix",
+    "Vals",
     "webcompat"
   ],
   "jest.autoRun": "off"
