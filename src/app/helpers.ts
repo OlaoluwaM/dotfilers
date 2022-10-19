@@ -95,11 +95,26 @@ export function getPathToDotfilesDirPath() {
   );
 }
 
-export async function getPathsToAllConfigGroupDirsInExistence(): Promise<
-  ExitCodes.OK | E.Either<Error, string[]>
-> {
-  const shouldProceedWithGettingAllConfigGroupNames = () =>
-    prompts(
+export async function getPathsToAllConfigGroupDirsInExistence(
+  overridePrompt: boolean
+): Promise<ExitCodes.OK | E.Either<Error, string[]>> {
+  return await pipe(
+    promptForConfirmation(overridePrompt),
+    T.map(({ answer }: { answer: boolean }) =>
+      match(answer)
+        .with(false, () => ExitCodes.OK as const)
+        .with(true, getAllConfigGroupDirPaths())
+        .exhaustive()
+    )
+  )();
+}
+
+function promptForConfirmation(overridePrompt: boolean) {
+  return async () => {
+    // We specify `undefined` here because we want to manually clear our overrides
+    // On every pass to this function if we do not want the prompt to be overridden
+    prompts.override({ answer: overridePrompt === true ? true : undefined });
+    return await prompts(
       {
         type: 'confirm',
         name: 'answer',
@@ -108,17 +123,7 @@ export async function getPathsToAllConfigGroupDirsInExistence(): Promise<
       },
       { onCancel: () => false }
     );
-
-  // eslint-disable-next-line no-return-await
-  return await pipe(
-    shouldProceedWithGettingAllConfigGroupNames,
-    T.map(({ answer }: { answer: boolean }) =>
-      match(answer)
-        .with(false, () => ExitCodes.OK as const)
-        .with(true, getAllConfigGroupDirPaths())
-        .exhaustive()
-    )
-  )();
+  };
 }
 
 export function getAllConfigGroupDirPaths(): TE.TaskEither<Error, string[]> {

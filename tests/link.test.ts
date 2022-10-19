@@ -205,10 +205,11 @@ describe('Tests for the happy path', () => {
       process.env.DOTS = `${LINK_TEST_DATA_DIR}/valid-mock-dots`;
       process.env.DOTFILES = `${LINK_TEST_DATA_DIR}/valid-mock-dots`;
 
-      prompts.inject([true]);
-
       // Act
-      const { errors, forTest: configGroups } = await linkCmd([], mockOptions);
+      const { errors, forTest: configGroups } = await linkCmd(
+        [],
+        mockOptions.concat(['-y'])
+      );
 
       const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
@@ -536,7 +537,9 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructurePath(generateConfigGroupEntityPath(nestedDirName)),
+        generateConfigGroupStructurePath(
+          generateConfigGroupEntityPath(nestedDirName)
+        ),
         createDirIfItDoesNotExist
       );
 
@@ -688,7 +691,9 @@ describe('Tests for the happy path', () => {
         const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
         const mockConfigGroupSetupTask = pipe(
-          generateConfigGroupStructurePath(generateConfigGroupEntityPath(nestedDirName)),
+          generateConfigGroupStructurePath(
+            generateConfigGroupEntityPath(nestedDirName)
+          ),
           createDirIfItDoesNotExist
         );
 
@@ -762,7 +767,9 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructurePath(generateConfigGroupEntityPath(nestedDirName)),
+        generateConfigGroupStructurePath(
+          generateConfigGroupEntityPath(nestedDirName)
+        ),
         createDirIfItDoesNotExist
       );
 
@@ -825,7 +832,9 @@ describe('Tests for the happy path', () => {
       const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
 
       const mockConfigGroupSetupTask = pipe(
-        generateConfigGroupStructurePath(generateConfigGroupEntityPath(nestedDirName)),
+        generateConfigGroupStructurePath(
+          generateConfigGroupEntityPath(nestedDirName)
+        ),
         createDirIfItDoesNotExist
       );
 
