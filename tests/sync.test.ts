@@ -68,7 +68,9 @@ describe('Tests for the happy path', () => {
   test('Should ensure that the sync command works as expected given the desired, happy path, inputs', async () => {
     // Arrange
     await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('new.ts', '')();
-    const { stdout } = await execShellCmd(`ls ${VALID_WORKING_GIT_REPO_DIR_PATH}`);
+    const { stdout } = await execShellCmd(
+      `git -C ${VALID_WORKING_GIT_REPO_DIR_PATH} status --porcelain`
+    );
 
     const defaultCommitMsg = generateDefaultCommitMessage();
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
@@ -101,7 +103,9 @@ describe('Tests for the happy path', () => {
   test('Should ensure that the sync command accepts a custom commit messages', async () => {
     // Arrange
     await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('update.ts', '')();
-    const { stdout } = await execShellCmd(`ls ${VALID_WORKING_GIT_REPO_DIR_PATH}`);
+    const { stdout } = await execShellCmd(
+      `git -C ${VALID_WORKING_GIT_REPO_DIR_PATH} status --porcelain`
+    );
 
     const customCommitMsg = 'feat: scheduled dotfiles update successful';
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
@@ -134,7 +138,9 @@ describe('Tests for the happy path', () => {
   test('Should ensure that sync command falls back to using default commit message if custom message is empty string', async () => {
     // Arrange
     await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('another-one.ts', '')();
-    const { stdout } = await execShellCmd(`ls ${VALID_WORKING_GIT_REPO_DIR_PATH}`);
+    const { stdout } = await execShellCmd(
+      `git -C ${VALID_WORKING_GIT_REPO_DIR_PATH} status --porcelain`
+    );
 
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
     const expectedCommitMessage = generateDefaultCommitMessage();
