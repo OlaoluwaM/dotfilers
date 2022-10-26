@@ -165,12 +165,13 @@ function isGitRepo(dirPath: string) {
 function repoHasACleanWorkingTree(dirPath: string) {
   return async () => {
     try {
-      const { stdout } = await execShellCmd(
+      await execShellCmd(
         `[[ $(git -C ${dirPath} status --porcelain | wc -l) -gt "0" ]]`
       );
-      console.log({ stdout });
+      console.log({ dirPath });
       return SYNC_CMD_STATES.DOTFILES_DIR_HAS_CHANGES;
-    } catch {
+    } catch (e) {
+      console.log({ e });
       return SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES;
     }
   };
