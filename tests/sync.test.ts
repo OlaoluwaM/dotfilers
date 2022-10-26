@@ -73,6 +73,7 @@ describe('Tests for the happy path', () => {
 
     // Act
     const outputVal = await syncCmd([], [])();
+    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH });
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -104,6 +105,7 @@ describe('Tests for the happy path', () => {
 
     // Act
     const outputVal = await syncCmd([], ['-m', customCommitMsg])();
+    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH });
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -135,6 +137,7 @@ describe('Tests for the happy path', () => {
 
     // Act
     const outputVal = await syncCmd([], ['-m', ''])();
+    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH });
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
