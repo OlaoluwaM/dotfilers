@@ -151,7 +151,10 @@ function isGitRepo(dirPath: string) {
   return TE.tryCatch(
     async () => {
       // This shell command checks whether a specific directory is a git repo. Gotten from here: https://stackoverflow.com/a/39518382/17612886
-      await execShellCmd(`git -C ${dirPath} rev-parse 2>/dev/null`, 'forGitRepoCheck');
+      await execShellCmd(
+        `git -C ${dirPath} rev-parse 2>/dev/null`,
+        'forGitRepoCheck'
+      );
       return SYNC_CMD_STATES.DOTFILES_DIR_IS_VALID_GIT_REPO;
     },
     () => SYNC_CMD_STATES.DOTFILES_DIR_IS_NOT_GIT_REPO
@@ -162,9 +165,10 @@ function isGitRepo(dirPath: string) {
 function repoHasACleanWorkingTree(dirPath: string) {
   return async () => {
     try {
-      await execShellCmd(
+      const { stdout } = await execShellCmd(
         `[[ $(git -C ${dirPath} status --porcelain | wc -l) -gt "0" ]]`
       );
+      console.log({ stdout });
       return SYNC_CMD_STATES.DOTFILES_DIR_HAS_CHANGES;
     } catch {
       return SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES;
