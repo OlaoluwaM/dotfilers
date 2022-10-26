@@ -34,3 +34,4 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "<>"
       - run: npm run test:ci
+        shell: bash
