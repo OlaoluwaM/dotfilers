@@ -7,9 +7,6 @@ mkdir -p "$TARGET_DIR/valid-git-repo-working"
 mkdir -p "$TARGET_DIR/valid-git-repo-clean"
 
 echo "Setting up git in mock repos..."
-git config user.name "GitHub Actions Bot"
-git config user.email "<>"
-
 echo "Setting up working mock repo..."
 git -C "$TARGET_DIR/valid-git-repo-working" init
 touch $TARGET_DIR/valid-git-repo-working/{sample.txt,.gitignore,README.md,index.ts,utils.ts}
