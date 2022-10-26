@@ -166,6 +166,7 @@ export function execShellCmd(shellCmd: string, scope: string = '') {
 
   return pipe(
     getEnv(`${SHELL_EXEC_MOCK_VAR_NAME}${scope}`),
+
     O.fold(
       () => promisifiedExec,
 

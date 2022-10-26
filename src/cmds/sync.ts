@@ -168,10 +168,8 @@ function repoHasACleanWorkingTree(dirPath: string) {
       await execShellCmd(
         `[[ $(git -C ${dirPath} status --porcelain | wc -l) -gt "0" ]]`
       );
-      console.log({ dirPath });
       return SYNC_CMD_STATES.DOTFILES_DIR_HAS_CHANGES;
-    } catch (e) {
-      console.log({ e });
+    } catch {
       return SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES;
     }
   };
