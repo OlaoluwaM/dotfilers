@@ -20,6 +20,7 @@ import {
   generateGitInstance,
   generateDefaultCommitMessage,
 } from '../src/cmds/sync';
+import { execShellCmd } from '@utils/index';
 
 const SYNC_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/sync`;
 
@@ -67,13 +68,14 @@ describe('Tests for the happy path', () => {
   test('Should ensure that the sync command works as expected given the desired, happy path, inputs', async () => {
     // Arrange
     await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('new.ts', '')();
+    const { stdout } = await execShellCmd(`ls ${VALID_WORKING_GIT_REPO_DIR_PATH}`);
 
     const defaultCommitMsg = generateDefaultCommitMessage();
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
 
     // Act
     const outputVal = await syncCmd([], [])();
-    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH });
+    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH, stdout });
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -99,13 +101,14 @@ describe('Tests for the happy path', () => {
   test('Should ensure that the sync command accepts a custom commit messages', async () => {
     // Arrange
     await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('update.ts', '')();
+    const { stdout } = await execShellCmd(`ls ${VALID_WORKING_GIT_REPO_DIR_PATH}`);
 
     const customCommitMsg = 'feat: scheduled dotfiles update successful';
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
 
     // Act
     const outputVal = await syncCmd([], ['-m', customCommitMsg])();
-    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH });
+    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH, stdout });
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -131,13 +134,14 @@ describe('Tests for the happy path', () => {
   test('Should ensure that sync command falls back to using default commit message if custom message is empty string', async () => {
     // Arrange
     await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('another-one.ts', '')();
+    const { stdout } = await execShellCmd(`ls ${VALID_WORKING_GIT_REPO_DIR_PATH}`);
 
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
     const expectedCommitMessage = generateDefaultCommitMessage();
 
     // Act
     const outputVal = await syncCmd([], ['-m', ''])();
-    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH });
+    console.log({ outputVal, VALID_WORKING_GIT_REPO_DIR_PATH, stdout });
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
