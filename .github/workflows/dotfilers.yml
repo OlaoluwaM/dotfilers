@@ -28,9 +28,4 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "npm"
       - run: npm ci
-      # https://ao.ms/how-to-use-git-commit-in-github-actions/
-      - name: setup git config
-        run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "<>"
       - run: npm run test:ci
