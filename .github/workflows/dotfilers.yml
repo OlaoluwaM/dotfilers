@@ -15,6 +15,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        shell: bash
+
     strategy:
       matrix:
         node-version: [16.x, 17.x, 18.x]
@@ -34,4 +38,3 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "<>"
       - run: npm run test:ci
-        shell: bash
