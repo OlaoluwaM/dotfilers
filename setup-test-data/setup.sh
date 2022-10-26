@@ -8,6 +8,7 @@ test -d "$DATA_DIR" && rm -rf "$DATA_DIR"
 echo "Seting up test-data directory...."
 mkdir "$DATA_DIR"
 
+source "$rootDir/setup-scripts/sync.test.sh"
 source "$rootDir/setup-scripts/link.test.sh"
 source "$rootDir/setup-scripts/unlink.test.sh"
 source "$rootDir/setup-scripts/learning.test.sh"

@@ -1,5 +1,4 @@
 import * as A from 'fp-ts/lib/Array';
-import * as L from 'monocle-ts/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
@@ -11,11 +10,7 @@ import { pipe } from 'fp-ts/lib/function';
 import { match, P } from 'ts-pattern';
 import { ExitCodes } from '../constants';
 import { newAggregateError } from '@utils/AggregateError';
-import {
-  ParserOutput,
-  default as parseArgv,
-  optionConfigConstructor,
-} from '@lib/arg-parser';
+import { optionConfigConstructor } from '@lib/arg-parser';
 import {
   isNotIgnored,
   getFilesFromConfigGroup,
@@ -32,6 +27,7 @@ import {
   exitCliWithCodeOnly,
   linkOperationTypeToPastTense,
   getPathsToAllConfigGroupDirsInExistence,
+  getParsedOptions,
 } from '@app/helpers';
 import {
   File,
@@ -49,14 +45,14 @@ interface ParsedCmdOptions {
 }
 
 export default async function main(
-  passedArguments: string[],
-  cliOptions: string[] = []
+  cmdArguments: string[],
+  cmdOptions: string[] = []
 ) {
-  const parsedCmdOptions: ParsedCmdOptions = parseCmdOptions(cliOptions);
+  const parsedCmdOptions: ParsedCmdOptions = parseCmdOptions(cmdOptions);
 
-  const configGroupNamesOrDirPaths = A.isEmpty(passedArguments)
+  const configGroupNamesOrDirPaths = A.isEmpty(cmdArguments)
     ? await getPathsToAllConfigGroupDirsInExistence(parsedCmdOptions.yes)
-    : passedArguments;
+    : cmdArguments;
 
   const cmdOutput = await match(configGroupNamesOrDirPaths)
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
@@ -70,18 +66,10 @@ export default async function main(
   return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
-function parseCmdOptions(rawCmdOptions: string[]): ParsedCmdOptions {
-  const linkCmdOptionsConfig = generateOptionConfig();
-
-  const OptionsLens = pipe(
-    L.id<ParserOutput<typeof linkCmdOptionsConfig>>(),
-    L.prop('options')
-  );
-
+function parseCmdOptions(cmdOptions: string[]): ParsedCmdOptions {
   return pipe(
-    rawCmdOptions,
-    parseArgv(linkCmdOptionsConfig),
-    OptionsLens.get,
+    cmdOptions,
+    pipe(generateOptionConfig(), getParsedOptions),
     RC.map(O.getOrElse(() => false))
   );
 }
@@ -112,10 +100,10 @@ function generateOptionConfig() {
 
 async function linkCmd(
   configGroupNamesOrDirPaths: string[],
-  cliOptions: ParsedCmdOptions
+  parsedCmdOptions: ParsedCmdOptions
 ): Promise<CmdResponse<ConfigGroup[]>> {
   const chosenLinkCmdOperationFn = pipe(
-    cliOptions,
+    parsedCmdOptions,
     determineLinkCmdOperationToPerform,
     performChosenLinkCmdOperation
   );
@@ -123,6 +111,7 @@ async function linkCmd(
   const configGroupsWithErrors = await createConfigGroups(
     configGroupNamesOrDirPaths
   )();
+
   const { left: configGroupCreationErrs, right: configGroups } =
     configGroupsWithErrors;
 
@@ -133,12 +122,11 @@ async function linkCmd(
     errors: [...configGroupCreationErrs, ...operationErrors],
     output: operationOutput,
     forTest: configGroups,
+    warnings: []
   };
 }
 
-function determineLinkCmdOperationToPerform(
-  parsedLinkCmdOptions: ParsedCmdOptions
-) {
+function determineLinkCmdOperationToPerform(parsedLinkCmdOptions: ParsedCmdOptions) {
   type ValidLinkCmdOptionConfiguration =
     | [true, false]
     | [false, true]

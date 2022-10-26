@@ -1,5 +1,4 @@
 import * as A from 'fp-ts/lib/Array';
-import * as L from 'monocle-ts/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
@@ -10,12 +9,8 @@ import { ExitCodes } from '../constants';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { removeEntityAt } from '../utils/index';
 import { lensProp, view } from 'ramda';
+import { optionConfigConstructor } from '@lib/arg-parser';
 import { DestinationPath, File, ConfigGroup, CmdResponse } from '@types';
-import {
-  ParserOutput,
-  default as parseArgv,
-  optionConfigConstructor,
-} from '@lib/arg-parser';
 import {
   isNotIgnored,
   getFilesFromConfigGroup,
@@ -23,6 +18,7 @@ import {
 } from '@app/configGroup';
 import {
   exitCli,
+  getParsedOptions,
   exitCliWithCodeOnly,
   getPathsToAllConfigGroupDirsInExistence,
 } from '@app/helpers';
@@ -32,16 +28,15 @@ interface ParsedCmdOptions {
 }
 
 export default async function main(
-  passedArguments: string[],
-  cliOptions: string[] = []
+  cmdArguments: string[],
+  cmdOptions: string[] = []
 ) {
-  const parsedCmdOptions: ParsedCmdOptions = parseCmdOptions(cliOptions);
+  const parsedCmdOptions: ParsedCmdOptions = parseUnlinkCmdOptions(cmdOptions);
 
-  const configGroupNamesOrDirPaths = A.isEmpty(passedArguments)
+  const configGroupNamesOrDirPaths = A.isEmpty(cmdArguments)
     ? await getPathsToAllConfigGroupDirsInExistence(parsedCmdOptions.yes)
-    : passedArguments;
+    : cmdArguments;
 
-  // eslint-disable-next-line no-return-await
   const cmdOutput = await match(configGroupNamesOrDirPaths)
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
     .with({ _tag: 'Left' }, (_, { left }) =>
@@ -54,18 +49,10 @@ export default async function main(
   return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
-function parseCmdOptions(rawCmdOptions: string[]): ParsedCmdOptions {
-  const linkCmdOptionsConfig = generateOptionConfig();
-
-  const OptionsLens = pipe(
-    L.id<ParserOutput<typeof linkCmdOptionsConfig>>(),
-    L.prop('options')
-  );
-
+function parseUnlinkCmdOptions(cmdOptions: string[]): ParsedCmdOptions {
   return pipe(
-    rawCmdOptions,
-    parseArgv(linkCmdOptionsConfig),
-    OptionsLens.get,
+    cmdOptions,
+    pipe(generateOptionConfig(), getParsedOptions),
     RC.map(O.getOrElse(() => false))
   );
 }
@@ -105,6 +92,7 @@ async function unlinkCmd(
     errors: [...deletionErrors, ...configGroupCreationErrs],
     output: deletionOutput,
     forTest: validConfigGroupDestinationPaths,
+    warnings: [],
   };
 }
 

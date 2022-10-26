@@ -80,7 +80,7 @@ function generateConfigGroupDirForNonExistingOnes(absPath: string) {
     doesPathExist(absPath),
     TE.swap,
     TE.mapLeft(() => `${absPath} already exists. Skipping...`),
-    TE.chain(flow(() => absPath, createDirIfItDoesNotExist, TE.fromTask)),
+    TE.chainW(flow(() => absPath, createDirIfItDoesNotExist, TE.fromTask)),
     TE.chainFirstTaskK(() => createDefaultDestinationRecordFile(absPath)),
     TE.map(() => `${path.basename(absPath)} config group created (${absPath})`)
   ) as TE.TaskEither<string, string>;

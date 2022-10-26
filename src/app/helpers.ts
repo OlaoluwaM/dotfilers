@@ -1,4 +1,5 @@
 import * as E from 'fp-ts/lib/Either';
+import * as L from 'monocle-ts/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as IO from 'fp-ts/lib/IO';
@@ -19,6 +20,10 @@ import {
   isValidShellExpansion,
   expandShellVariablesInString,
 } from '@lib/shellVarStrExpander';
+import parseArgv, {
+  AnyParserOutput,
+  ParserConfig,
+} from '@lib/arg-parser/';
 import {
   ExitCodes,
   SHELL_VARS_TO_CONFIG_GRP_DIRS,
@@ -113,7 +118,7 @@ function promptForConfirmation(overridePrompt: boolean) {
   return async () => {
     // We specify `undefined` here because we want to manually clear our overrides
     // On every pass to this function if we do not want the prompt to be overridden
-    prompts.override({ answer: overridePrompt === true ? true : undefined });
+    prompts.override({ answer: overridePrompt || undefined });
     return await prompts(
       {
         type: 'confirm',
@@ -157,4 +162,17 @@ export function getPathToDotfilesDirPathRetrievalError() {
         `Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables (${SHELL_VARS_TO_CONFIG_GRP_DIRS})? If so, then perhaps you have no configuration groups yet.`
       )
     );
+}
+
+export function parseCmdOptions<PC extends ParserConfig>(parserConfig: PC) {
+  return (cmdOptions: string[]) => pipe(cmdOptions, parseArgv(parserConfig));
+}
+
+function getOptionsFromParserOutput<PO extends AnyParserOutput>(parserOutput: PO) {
+  return pipe(L.id<PO>(), L.prop('options')).get(parserOutput);
+}
+
+export function getParsedOptions<PC extends ParserConfig>(parserConfig: PC) {
+  return (cmdOptions: string[]) =>
+    pipe(parseArgv(parserConfig)(cmdOptions), getOptionsFromParserOutput);
 }
