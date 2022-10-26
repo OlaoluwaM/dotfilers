@@ -162,7 +162,7 @@ export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
 }
 
 export function execShellCmd(shellCmd: string, scope: string = '') {
-  const promisifiedExec = promisify(exec)(shellCmd);
+  const promisifiedExec = promisify(exec)(shellCmd, { shell: '/bin/bash' });
 
   return pipe(
     getEnv(`${SHELL_EXEC_MOCK_VAR_NAME}${scope}`),
