@@ -1,7 +1,7 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { defaults } from 'jest-config';
-
-import type { Config } from '@jest/types';
+import type { JestConfigWithTsJest } from 'ts-jest';
+// import type { Config } from '@jest/types';
 
 const areWeTestingLibs = process.env?.FOR_LIB ?? false;
 const isCI = process.env?.CI ?? false;
@@ -19,7 +19,7 @@ if (isCI) {
 
 testPathIgnorePatterns = testPathIgnorePatterns.concat(['/tests/test-data/']);
 
-const config: Config.InitialOptions = {
+const config: JestConfigWithTsJest = {
   preset: 'ts-jest/presets/default-esm',
   testTimeout: 10000,
   testEnvironment: 'node',
@@ -29,13 +29,15 @@ const config: Config.InitialOptions = {
   collectCoverageFrom,
   testPathIgnorePatterns,
   setupFilesAfterEnv: ['jest-extended/all', '<rootDir>/tests/setup.ts'],
-  transform: {},
-  extensionsToTreatAsEsm: ['.ts'],
-  globals: {
-    'ts-jest': {
-      useESM: true,
-    },
+  transform: {
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        useESM: true,
+      },
+    ],
   },
+  extensionsToTreatAsEsm: ['.ts'],
   moduleFileExtensions: ['js', 'ts', 'mjs'],
   moduleNameMapper: {
     '#ansi-styles':
