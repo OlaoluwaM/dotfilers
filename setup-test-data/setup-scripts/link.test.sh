@@ -2,11 +2,11 @@
 
 TARGET_DIR="$DATA_DIR/link"
 
-echo "Creating test data directory for testing the link command..."
 mkdir -p "$TARGET_DIR/mock-dots"
 mkdir -p "$TARGET_DIR/valid-mock-dots"
 
-echo "Populating mock-dots directory with fake dots..."
+echo "Populating mock-dots directory with fake dot-files and mock config groups..."
+
 MOCK_CONFIG_GRP_PATHS=("$TARGET_DIR/mock-dots/npm" "$TARGET_DIR/valid-mock-dots/npm" "$TARGET_DIR/mock-dots/git" "$TARGET_DIR/valid-mock-dots/git" "$TARGET_DIR/mock-dots/bat" "$TARGET_DIR/valid-mock-dots/bat" "$TARGET_DIR/mock-dots/neovim" "$TARGET_DIR/valid-mock-dots/neovim" "$TARGET_DIR/mock-dots/withAllIgnored" "$TARGET_DIR/mock-dots/withSomeIgnored" "$TARGET_DIR/mock-dots/withPathIssues" "$TARGET_DIR/mock-dots/tilix" "$TARGET_DIR/valid-mock-dots/tilix")
 
 for CONFIG_GRP_PATH in "${MOCK_CONFIG_GRP_PATHS[@]}"; do
@@ -36,4 +36,3 @@ touch $TARGET_DIR/mock-dots/withSomeIgnored/{navi.config.yaml,navi.sample.json,n
 touch $TARGET_DIR/mock-dots/withPathIssues/{sample.rs,setup.ts,.configrc}
 
 mkdir -p "$TARGET_DIR/mock-home"
-echo -e "Done!\n"

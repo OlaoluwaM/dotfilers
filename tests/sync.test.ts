@@ -1,13 +1,22 @@
 /* globals expect, describe, test */
+import * as A from 'fp-ts/lib/Array';
 import * as E from 'fp-ts/lib/Either';
 import * as L from 'monocle-ts/Lens';
+import * as S from 'fp-ts/lib/string';
+import * as T from 'fp-ts/lib/Task';
+import * as RA from 'fp-ts/lib/ReadonlyArray';
+
+import path from 'path';
+import fsPromise from 'fs/promises';
 
 import { jest } from '@jest/globals';
 import { SimpleGit } from 'simple-git';
-import { createFile } from './helpers';
+import { execShellCmd } from '@utils/index';
 import { CmdResponse } from '@types';
-import { identity, pipe } from 'fp-ts/lib/function';
+import { Brand, createBrander } from '@lib/brand';
+import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { TEST_DATA_DIR_PREFIX } from './setup';
+import { createFile, normalizeStdout } from './helpers';
 import {
   ExitCodes,
   SHELL_EXEC_MOCK_VAR_NAME,
@@ -21,18 +30,33 @@ import {
   generateDefaultCommitMessage,
 } from '../src/cmds/sync';
 
-const SYNC_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/sync`;
-
-const VALID_CLEAN_GIT_REPO_DIR_PATH = `${SYNC_TEST_DATA_DIR}/valid-git-repo-clean`;
-const VALID_WORKING_GIT_REPO_DIR_PATH = `${SYNC_TEST_DATA_DIR}/valid-git-repo-working`;
-
 interface SyncCmd {
   syncCmd: ReturnType<typeof _main>;
   mockedSimpleGitInstance: SimpleGit | Error;
 }
 
+type RepoPath = Brand<string, 'Repo Path'>;
+type UpstreamPath = Brand<string, 'Upstream Path'>;
+
+const toRepoPath = createBrander<RepoPath>();
+const toUpstreamPath = createBrander<UpstreamPath>();
+
+const SYNC_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/sync`;
+
+const VALID_CLEAN_GIT_REPO_DIR_PATH =
+  `${SYNC_TEST_DATA_DIR}/valid-git-repo-clean` as RepoPath;
+
+const VALID_WORKING_GIT_REPO_DIR_PATH =
+  `${SYNC_TEST_DATA_DIR}/valid-git-repo-working` as RepoPath;
+
+const VALID_CLEAN_GIT_REPO_UPSTREAM_DIR_PATH =
+  `${SYNC_TEST_DATA_DIR}/valid-git-repo-clean-upstream` as UpstreamPath;
+
+const VALID_WORKING_GIT_REPO_UPSTREAM_DIR_PATH =
+  `${SYNC_TEST_DATA_DIR}/valid-git-repo-working-upstream` as UpstreamPath;
+
 function getSyncCmd(
-  dotfilesDirPath: string = VALID_WORKING_GIT_REPO_DIR_PATH
+  dotfilesDirPath: RepoPath = VALID_WORKING_GIT_REPO_DIR_PATH
 ): SyncCmd {
   process.env.DOTS = dotfilesDirPath;
   process.env.DOTFILES = dotfilesDirPath;
@@ -55,21 +79,86 @@ function getSyncCmd(
 }
 
 function mockSimpleGitInstance(simpleGitInstance: SimpleGit) {
-  // any castings are used here so I don't need to reimplement the simplegit signature for these methods
-  jest.spyOn(simpleGitInstance, 'add').mockReturnValue(simpleGitInstance as any);
-  jest.spyOn(simpleGitInstance, 'commit').mockReturnValue(simpleGitInstance as any);
-  jest.spyOn(simpleGitInstance, 'push').mockReturnValue(simpleGitInstance as any);
+  jest.spyOn(simpleGitInstance, 'add');
+  jest.spyOn(simpleGitInstance, 'push');
+  jest.spyOn(simpleGitInstance, 'commit');
 
   return simpleGitInstance;
+}
+
+function getAllFilesFromUpstream(upstreamPath: UpstreamPath) {
+  return pipe(
+    () =>
+      execShellCmd(`git -C ${upstreamPath} ls-tree --full-tree -r --name-only HEAD`),
+    T.map(({ stdout }) => normalizeStdout(stdout))
+  );
+}
+
+function doesFileExistInUpstream(upstreamFilePath: UpstreamPath) {
+  const upstreamPath = path.dirname(upstreamFilePath);
+  const filename = path.basename(upstreamFilePath);
+
+  return pipe(
+    upstreamPath,
+    toUpstreamPath,
+    getAllFilesFromUpstream,
+    T.map(RA.elem(S.Eq)(filename))
+  );
+}
+
+function getUpstreamFileContents(upstreamFilePath: UpstreamPath) {
+  const upstreamPath = path.dirname(upstreamFilePath);
+  const filename = path.basename(upstreamFilePath);
+
+  return pipe(
+    () => execShellCmd(`git -C ${upstreamPath} show main:${filename} | cat`),
+    T.map(({ stdout }) => stdout)
+  );
+}
+
+function getAllFilesFromRepo(repoPath: RepoPath) {
+  return pipe(
+    () => fsPromise.readdir(repoPath, { withFileTypes: true }),
+    T.map(
+      flow(
+        A.filter(dirent => dirent.isFile()),
+        A.map(({ name }) => name)
+      )
+    )
+  );
 }
 
 describe('Tests for the happy path', () => {
   test('Should ensure that the sync command works as expected given the desired, happy path, inputs', async () => {
     // Arrange
-    await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('new.ts', '')();
+    const filename = 'new.txt';
+    const expectedFileContents = 'This is a new file for testing purposes';
+
+    await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)(
+      filename,
+      expectedFileContents
+    )();
 
     const defaultCommitMsg = generateDefaultCommitMessage();
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
+
+    const upstreamFilePath = pipe(
+      path.join(VALID_WORKING_GIT_REPO_UPSTREAM_DIR_PATH, filename),
+      toUpstreamPath
+    );
+
+    const getUpstreamFileContentsOfCreatedFile =
+      getUpstreamFileContents(upstreamFilePath);
+
+    const doesCreatedFileExistInUpstream = doesFileExistInUpstream(upstreamFilePath);
+
+    const retrieveAllRepoFiles = getAllFilesFromRepo(
+      VALID_WORKING_GIT_REPO_DIR_PATH
+    );
+
+    const retrieveAllRepoUpstreamFiles = getAllFilesFromUpstream(
+      VALID_WORKING_GIT_REPO_UPSTREAM_DIR_PATH
+    );
 
     // Act
     const outputVal = await syncCmd([], [])();
@@ -93,14 +182,48 @@ describe('Tests for the happy path', () => {
       forTest: '',
       output: [defaultCommitMsg],
     });
+
+    expect(await doesCreatedFileExistInUpstream()).toBeTrue();
+
+    expect(await getUpstreamFileContentsOfCreatedFile()).toEqual(
+      expectedFileContents
+    );
+
+    expect(await retrieveAllRepoFiles()).toIncludeSameMembers(
+      await retrieveAllRepoUpstreamFiles()
+    );
   });
 
   test('Should ensure that the sync command accepts a custom commit messages', async () => {
     // Arrange
-    await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('update.ts', '')();
+    const filename = 'update.txt';
+    const expectedFileContents =
+      'This is yet another file for testing purposes. Its an update!';
+
+    await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)(
+      filename,
+      expectedFileContents
+    )();
 
     const customCommitMsg = 'feat: scheduled dotfiles update successful';
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
+
+    const upstreamFilePath = pipe(
+      path.join(VALID_WORKING_GIT_REPO_UPSTREAM_DIR_PATH, filename),
+      toUpstreamPath
+    );
+
+    const getUpstreamFileContentsOfCreatedFile =
+      getUpstreamFileContents(upstreamFilePath);
+
+    const doesCreatedFileExistInUpstream = doesFileExistInUpstream(upstreamFilePath);
+
+    const retrieveAllRepoFiles = getAllFilesFromRepo(
+      VALID_WORKING_GIT_REPO_DIR_PATH
+    );
+    const retrieveAllRepoUpstreamFiles = getAllFilesFromUpstream(
+      VALID_WORKING_GIT_REPO_UPSTREAM_DIR_PATH
+    );
 
     // Act
     const outputVal = await syncCmd([], ['-m', customCommitMsg])();
@@ -124,14 +247,48 @@ describe('Tests for the happy path', () => {
       forTest: '',
       output: [customCommitMsg],
     });
+
+    expect(await doesCreatedFileExistInUpstream()).toBeTrue();
+
+    expect(await getUpstreamFileContentsOfCreatedFile()).toEqual(
+      expectedFileContents
+    );
+
+    expect(await retrieveAllRepoFiles()).toIncludeSameMembers(
+      await retrieveAllRepoUpstreamFiles()
+    );
   });
 
   test('Should ensure that sync command falls back to using default commit message if custom message is empty string', async () => {
     // Arrange
-    await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)('another-one.ts', '')();
+    const filename = 'another-one.txt';
+    const expectedFileContents =
+      'This is yet another file for testing purposes. Another one!';
+
+    await createFile(VALID_WORKING_GIT_REPO_DIR_PATH)(
+      filename,
+      expectedFileContents
+    )();
 
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
     const expectedCommitMessage = generateDefaultCommitMessage();
+
+    const upstreamFilePath = pipe(
+      path.join(VALID_WORKING_GIT_REPO_UPSTREAM_DIR_PATH, filename),
+      toUpstreamPath
+    );
+
+    const getUpstreamFileContentsOfCreatedFile =
+      getUpstreamFileContents(upstreamFilePath);
+
+    const doesCreatedFileExistInUpstream = doesFileExistInUpstream(upstreamFilePath);
+
+    const retrieveAllRepoFiles = getAllFilesFromRepo(
+      VALID_WORKING_GIT_REPO_DIR_PATH
+    );
+    const retrieveAllRepoUpstreamFiles = getAllFilesFromUpstream(
+      VALID_WORKING_GIT_REPO_UPSTREAM_DIR_PATH
+    );
 
     // Act
     const outputVal = await syncCmd([], ['-m', ''])();
@@ -155,12 +312,27 @@ describe('Tests for the happy path', () => {
       forTest: '',
       output: [expectedCommitMessage],
     });
+
+    expect(await doesCreatedFileExistInUpstream()).toBeTrue();
+    
+    expect(await getUpstreamFileContentsOfCreatedFile()).toEqual(
+      expectedFileContents
+    );
+
+    expect(await retrieveAllRepoFiles()).toIncludeSameMembers(
+      await retrieveAllRepoUpstreamFiles()
+    );
   });
 
   test('Should ensure that the sync command exits early (and successfully) should there be no changes in the dotfiles repo', async () => {
     // Arrange
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd(
       VALID_CLEAN_GIT_REPO_DIR_PATH
+    );
+
+    const retrieveAllRepoFiles = getAllFilesFromRepo(VALID_CLEAN_GIT_REPO_DIR_PATH);
+    const retrieveAllRepoUpstreamFiles = getAllFilesFromUpstream(
+      VALID_CLEAN_GIT_REPO_UPSTREAM_DIR_PATH
     );
 
     // Act
@@ -180,6 +352,10 @@ describe('Tests for the happy path', () => {
       forTest: '',
       output: [SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES],
     });
+
+    expect(await retrieveAllRepoFiles()).toIncludeSameMembers(
+      await retrieveAllRepoUpstreamFiles()
+    );
   });
 });
 
@@ -187,7 +363,7 @@ describe('Tests for everything but the happy path', () => {
   test('Should ensure the sync command exits if the dotfiles directory is invalid', async () => {
     // Arrange
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd(
-      `${SYNC_TEST_DATA_DIR}/random-dir`
+      pipe(`${SYNC_TEST_DATA_DIR}/random-dir`, toRepoPath)
     );
 
     // Act

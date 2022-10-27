@@ -3,8 +3,8 @@ import * as R from 'fp-ts/lib/Record';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
 import * as L from 'monocle-ts/Lens';
-import * as MT from 'monocle-ts/Traversal';
 import * as Eq from 'fp-ts/lib/Eq';
+import * as MT from 'monocle-ts/Traversal';
 
 import path from 'path';
 
@@ -137,3 +137,15 @@ const getFileNamesFromConfigGroup = (configGroup: ConfigGroup) =>
 
 export const getFileNamesFromConfigGroups = (configGroups: ConfigGroup[]) =>
   pipe(configGroups, A.chain(getFileNamesFromConfigGroup));
+
+export function normalizeStdout(stdout: string) {
+  const SPACE_DELIMITER = '   ';
+  return pipe(
+    stdout,
+    S.replace(NEW_LINE_CHAR_REGEX, SPACE_DELIMITER),
+    S.trim,
+    S.split(SPACE_DELIMITER)
+  );
+}
+
+export const NEW_LINE_CHAR_REGEX = /\r?\n|\r/g;

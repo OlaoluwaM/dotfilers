@@ -37,4 +37,5 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "<>"
+          git config --global init.defaultBranch main
       - run: npm run test:ci
