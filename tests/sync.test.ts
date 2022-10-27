@@ -12,11 +12,11 @@ import fsPromise from 'fs/promises';
 import { jest } from '@jest/globals';
 import { SimpleGit } from 'simple-git';
 import { execShellCmd } from '@utils/index';
-import { CmdResponse } from '@types';
 import { Brand, createBrander } from '@lib/brand';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { createFile, normalizeStdout } from './helpers';
+import { CmdResponse, toCmdOptions, toPositionalArgs } from '@types';
 import {
   ExitCodes,
   SHELL_EXEC_MOCK_VAR_NAME,
@@ -161,7 +161,7 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd([], [])();
+    const outputVal = await syncCmd(toPositionalArgs([]), toCmdOptions([]))();
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -226,7 +226,10 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd([], ['-m', customCommitMsg])();
+    const outputVal = await syncCmd(
+      toPositionalArgs([]),
+      toCmdOptions(['-m', customCommitMsg])
+    )();
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -291,7 +294,10 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd([], ['-m', ''])();
+    const outputVal = await syncCmd(
+      toPositionalArgs([]),
+      toCmdOptions(['-m', ''])
+    )();
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -314,7 +320,7 @@ describe('Tests for the happy path', () => {
     });
 
     expect(await doesCreatedFileExistInUpstream()).toBeTrue();
-    
+
     expect(await getUpstreamFileContentsOfCreatedFile()).toEqual(
       expectedFileContents
     );
@@ -336,7 +342,10 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd([], ['-m', ''])();
+    const outputVal = await syncCmd(
+      toPositionalArgs([]),
+      toCmdOptions(['-m', ''])
+    )();
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -367,7 +376,7 @@ describe('Tests for everything but the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd([], [])();
+    const outputVal = await syncCmd(toPositionalArgs([]), toCmdOptions([]))();
     (outputVal as Function)(); // We expect output to be of type IO<never>
 
     // Assert
@@ -384,7 +393,7 @@ describe('Tests for everything but the happy path', () => {
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
 
     // Act
-    const outputVal = await syncCmd([], [])();
+    const outputVal = await syncCmd(toPositionalArgs([]), toCmdOptions([]))();
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);
@@ -410,7 +419,7 @@ describe('Tests for everything but the happy path', () => {
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
 
     // Act
-    const outputVal = await syncCmd([], [])();
+    const outputVal = await syncCmd(toPositionalArgs([]), toCmdOptions([]))();
 
     // Assert
     expect(outputVal).not.toBeInstanceOf(Function);

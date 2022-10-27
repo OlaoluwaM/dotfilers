@@ -1,3 +1,6 @@
+import * as T from 'fp-ts/lib/Task';
+import * as IO from 'fp-ts/lib/IO';
+
 import { EntryInfo } from 'readdirp';
 import { AggregateError } from '@utils/AggregateError';
 import { Brand, createBrander } from '@lib/brand';
@@ -75,12 +78,22 @@ export interface CmdResponse<T> {
   forTest: T; // NOTE: This return is for testing purposes only
 }
 
+export type PureCmdResponse = Omit<CmdResponse<unknown>, 'forTest'>;
+
 export interface Cmd<RT> {
-  (args: string[], cmdOptions: string[]): Promise<CmdResponse<RT>>;
+  (args: PositionalArgs, cmdOptions: CmdOptions): T.Task<
+    IO.IO<never> | CmdResponse<RT>
+  >;
 }
 
 export type SourcePath = Brand<string, 'Source Path'>;
 export type DestinationPath = Brand<string, 'Destination Path'>;
 
+export type CmdOptions = Brand<string[], 'Command Options'>;
+export type PositionalArgs = Brand<string[], 'Positional Args'>;
+
 export const toSourcePath = createBrander<SourcePath>();
 export const toDestinationPath = createBrander<DestinationPath>();
+
+export const toCmdOptions = createBrander<CmdOptions>();
+export const toPositionalArgs = createBrander<PositionalArgs>();

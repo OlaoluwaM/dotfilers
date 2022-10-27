@@ -6,12 +6,12 @@ import * as RT from 'fp-ts/lib/ReaderTask';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import { ExitCodes } from '../constants';
-import { CmdResponse } from '@types';
 import { NonEmptyArray } from 'fp-ts/lib/NonEmptyArray';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import { doesPathExistSync, execShellCmd } from '../utils/index';
 import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
+import { Cmd, CmdOptions, CmdResponse, PositionalArgs } from '@types';
 import {
   exitCli,
   getParsedOptions,
@@ -31,18 +31,17 @@ export interface GitInstance {
 
 // EXPORTED FOR TESTING PURPOSES ONLY
 // Ideally, we should have the gitInstance come as the last parameter, but it's more general than the cmdOptions parameter
-export function _main(gitInstance: E.Either<Error, GitInstance>) {
-  return (_: string[], cmdOptions: string[] = []) =>
+export function _main(gitInstance: E.Either<Error, GitInstance>): Cmd<string> {
+  return (_: PositionalArgs, cmdOptions: CmdOptions) =>
     pipe(
       gitInstance,
       TE.fromEither,
       TE.foldW(
         errorObj => async () => exitCli(errorObj.message, ExitCodes.GENERAL),
         ({ git, dotfilesDirPath }) =>
-          async () =>
-            // The reason we are invoking this here is because we do not want to have to differentiate between an asynchronous function (Task)
-            // and a synchronous function (IO) later in the pipeline
-            await syncCmd(git, cmdOptions)(dotfilesDirPath)()
+          // The reason we are invoking this here is because we do not want to have to differentiate between an asynchronous function (Task)
+          // and a synchronous function (IO) later in the pipeline
+          syncCmd(git)(dotfilesDirPath)(cmdOptions)
       )
     );
 }
@@ -102,39 +101,44 @@ export enum SYNC_CMD_STATES {
   DOTFILES_DIR_IS_NOT_GIT_REPO = "Sync error! No action was taken because your dotfiles directory is not a git repository or it didn't have a remote set yet. You will need to make it a git repository. If it's already a git repo with a valid remote, please create an issue on Github",
 }
 
-function syncCmd(git: SimpleGit, cmdOptions: string[]) {
-  return (dotfilesDirPath: string) =>
+function syncCmd(git: SimpleGit) {
+  return (dotfilesDirPath: string) => (cmdOptions: string[]) =>
     flow(
       isGitInstalled,
       TE.chain(() => isGitRepo(dotfilesDirPath)),
       TE.chainW(() => pipe(dotfilesDirPath, repoHasACleanWorkingTree, TE.fromTask)),
-
       TE.fold(
         syncErrorStateMsg => async () =>
           constructSyncCmdErrorResponse(syncErrorStateMsg),
-
-        dotfilesRepoStatus => async () => {
-          switch (dotfilesRepoStatus) {
-            case SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES:
-              return constructSyncCmdSuccessResponse(
-                SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES
-              );
-
-            case SYNC_CMD_STATES.DOTFILES_DIR_HAS_CHANGES: {
-              const commitMsg = generateGitCommitMessage(cmdOptions);
-              // Since this is within a `fold` we can perform a side effect
-              return await pipe(
-                performGitSyncOps(git)(dotfilesDirPath), // Side effect
-                RT.map(constructSyncCmdSuccessResponse)
-              )(commitMsg)();
-            }
-
-            default:
-              return constructSyncCmdErrorResponse(SYNC_CMD_STATES.FATAL_ERROR);
-          }
-        }
+        handleSyncSuccessOutput(git)(dotfilesDirPath)(cmdOptions)
       )
     )();
+}
+
+function handleSyncSuccessOutput(git: SimpleGit) {
+  return (dotfilesDirPath: string) =>
+    (cmdOptions: string[]) =>
+    (dotfilesRepoStatus: SYNC_CMD_STATES) =>
+    async () => {
+      switch (dotfilesRepoStatus) {
+        case SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES:
+          return constructSyncCmdSuccessResponse(
+            SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES
+          );
+
+        case SYNC_CMD_STATES.DOTFILES_DIR_HAS_CHANGES: {
+          const commitMsg = generateGitCommitMessage(cmdOptions);
+          // Since the enclosing function will be invoked within a `fold` we can perform a side effect
+          return await pipe(
+            performGitSyncOps(git)(dotfilesDirPath), // Side effect
+            RT.map(constructSyncCmdSuccessResponse)
+          )(commitMsg)();
+        }
+
+        default:
+          return constructSyncCmdErrorResponse(SYNC_CMD_STATES.FATAL_ERROR);
+      }
+    };
 }
 
 function isGitInstalled() {
