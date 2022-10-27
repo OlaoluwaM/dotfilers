@@ -1,6 +1,7 @@
-import type { Config } from '@jest/types';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { defaults } from 'jest-config';
+
+import type { Config } from '@jest/types';
 
 const areWeTestingLibs = process.env?.FOR_LIB ?? false;
 const isCI = process.env?.CI ?? false;

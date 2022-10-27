@@ -1,14 +1,16 @@
 import * as A from 'fp-ts/lib/Array';
+import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
+import * as RC from 'fp-ts/lib/Record';
 
 import path from 'path';
-import parseCliArgs from '@lib/minimal-argp/index';
 
 import { pipe } from 'fp-ts/lib/function';
 import { match, P } from 'ts-pattern';
 import { ExitCodes } from '../constants';
 import { newAggregateError } from '@utils/AggregateError';
+import { optionConfigConstructor } from '@lib/arg-parser';
 import {
   isNotIgnored,
   getFilesFromConfigGroup,
@@ -25,6 +27,7 @@ import {
   exitCliWithCodeOnly,
   linkOperationTypeToPastTense,
   getPathsToAllConfigGroupDirsInExistence,
+  getParsedOptions,
 } from '@app/helpers';
 import {
   File,
@@ -35,53 +38,80 @@ import {
   LinkCmdOperationType,
 } from '@types';
 
-const linkCmdCliOptionsConfig = {
-  options: {
-    hardlink: {
-      type: Boolean,
-      alias: 'H',
-    },
-    copy: {
-      type: Boolean,
-      alias: 'c',
-    },
-  },
-} as const;
+interface ParsedCmdOptions {
+  readonly hardlink: boolean;
+  readonly copy: boolean;
+  readonly yes: boolean;
+}
 
 export default async function main(
-  passedArguments: string[],
-  cliOptions: string[] = []
+  cmdArguments: string[],
+  cmdOptions: string[] = []
 ) {
-  const configGroupNamesOrDirPaths = A.isEmpty(passedArguments)
-    ? await getPathsToAllConfigGroupDirsInExistence()
-    : passedArguments;
+  const parsedCmdOptions: ParsedCmdOptions = parseCmdOptions(cmdOptions);
 
-  // eslint-disable-next-line no-return-await
+  const configGroupNamesOrDirPaths = A.isEmpty(cmdArguments)
+    ? await getPathsToAllConfigGroupDirsInExistence(parsedCmdOptions.yes)
+    : cmdArguments;
+
   const cmdOutput = await match(configGroupNamesOrDirPaths)
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
     .with({ _tag: 'Left' }, (_, { left }) =>
       exitCli(left.message, ExitCodes.GENERAL)
     )
-    .with({ _tag: 'Right' }, (_, { right }) => linkCmd(right, cliOptions))
-    .with(P.array(P.string), (_, value) => linkCmd(value, cliOptions))
+    .with({ _tag: 'Right' }, (_, { right }) => linkCmd(right, parsedCmdOptions))
+    .with(P.array(P.string), (_, value) => linkCmd(value, parsedCmdOptions))
     .exhaustive();
 
   return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
+function parseCmdOptions(cmdOptions: string[]): ParsedCmdOptions {
+  return pipe(
+    cmdOptions,
+    pipe(generateOptionConfig(), getParsedOptions),
+    RC.map(O.getOrElse(() => false))
+  );
+}
+
+function generateOptionConfig() {
+  return {
+    options: {
+      hardlink: optionConfigConstructor({
+        parser: () => true,
+        isFlag: true,
+        aliases: ['H'],
+      }),
+
+      copy: optionConfigConstructor({
+        parser: () => true,
+        isFlag: true,
+        aliases: ['c'],
+      }),
+
+      yes: optionConfigConstructor({
+        parser: () => true,
+        isFlag: true,
+        aliases: ['y'],
+      }),
+    },
+  };
+}
+
 async function linkCmd(
   configGroupNamesOrDirPaths: string[],
-  cliOptions: string[] = []
+  parsedCmdOptions: ParsedCmdOptions
 ): Promise<CmdResponse<ConfigGroup[]>> {
   const chosenLinkCmdOperationFn = pipe(
-    cliOptions,
-    parseCmdOptions,
+    parsedCmdOptions,
+    determineLinkCmdOperationToPerform,
     performChosenLinkCmdOperation
   );
 
   const configGroupsWithErrors = await createConfigGroups(
     configGroupNamesOrDirPaths
   )();
+
   const { left: configGroupCreationErrs, right: configGroups } =
     configGroupsWithErrors;
 
@@ -92,25 +122,11 @@ async function linkCmd(
     errors: [...configGroupCreationErrs, ...operationErrors],
     output: operationOutput,
     forTest: configGroups,
+    warnings: []
   };
 }
 
-function parseCmdOptions(rawCmdOptions: string[]) {
-  const { options: parsedLinkCmdOptions } = pipe(
-    rawCmdOptions,
-    parseCliArgs(linkCmdCliOptionsConfig)
-  );
-
-  return determineLinkCmdOperationToPerform(parsedLinkCmdOptions);
-}
-
-interface ParsedLinkCmdOptions {
-  readonly hardlink: boolean;
-  readonly copy: boolean;
-}
-function determineLinkCmdOperationToPerform(
-  parsedLinkCmdOptions: ParsedLinkCmdOptions
-) {
+function determineLinkCmdOperationToPerform(parsedLinkCmdOptions: ParsedCmdOptions) {
   type ValidLinkCmdOptionConfiguration =
     | [true, false]
     | [false, true]

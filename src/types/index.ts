@@ -70,13 +70,13 @@ export type isOptional<Structure, MemberUnion extends keyof Structure> = Omit<
 
 export interface CmdResponse<T> {
   errors: AggregateError[] | string[];
-  warnings?: string[];
+  warnings: string[];
   output: string[];
   forTest: T; // NOTE: This return is for testing purposes only
 }
 
 export interface Cmd<RT> {
-  (args: string[], cliOptions: string[]): Promise<CmdResponse<RT>>;
+  (args: string[], cmdOptions: string[]): Promise<CmdResponse<RT>>;
 }
 
 export type SourcePath = Brand<string, 'Source Path'>;

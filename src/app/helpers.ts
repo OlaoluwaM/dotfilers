@@ -1,4 +1,5 @@
 import * as E from 'fp-ts/lib/Either';
+import * as L from 'monocle-ts/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as IO from 'fp-ts/lib/IO';
@@ -19,6 +20,10 @@ import {
   isValidShellExpansion,
   expandShellVariablesInString,
 } from '@lib/shellVarStrExpander';
+import parseArgv, {
+  AnyParserOutput,
+  ParserConfig,
+} from '@lib/arg-parser/';
 import {
   ExitCodes,
   SHELL_VARS_TO_CONFIG_GRP_DIRS,
@@ -86,7 +91,7 @@ export const linkOperationTypeToPastTense: Record<LinkCmdOperationType, string> 
   symlink: 'symlinked',
 };
 
-export function getPathToDotfilesDir() {
+export function getPathToDotfilesDirPath() {
   return pipe(
     SHELL_VARS_TO_CONFIG_GRP_DIRS,
     RNEA.map(expandShellVariablesInString),
@@ -95,23 +100,11 @@ export function getPathToDotfilesDir() {
   );
 }
 
-export async function getPathsToAllConfigGroupDirsInExistence(): Promise<
-  ExitCodes.OK | E.Either<Error, string[]>
-> {
-  const shouldProceedWithGettingAllConfigGroupNames = () =>
-    prompts(
-      {
-        type: 'confirm',
-        name: 'answer',
-        message: 'Do you wish to operate on all config groups?',
-        initial: false,
-      },
-      { onCancel: () => false }
-    );
-
-  // eslint-disable-next-line no-return-await
+export async function getPathsToAllConfigGroupDirsInExistence(
+  overridePrompt: boolean
+): Promise<ExitCodes.OK | E.Either<Error, string[]>> {
   return await pipe(
-    shouldProceedWithGettingAllConfigGroupNames,
+    promptForConfirmation(overridePrompt),
     T.map(({ answer }: { answer: boolean }) =>
       match(answer)
         .with(false, () => ExitCodes.OK as const)
@@ -121,11 +114,28 @@ export async function getPathsToAllConfigGroupDirsInExistence(): Promise<
   )();
 }
 
+function promptForConfirmation(overridePrompt: boolean) {
+  return async () => {
+    // We specify `undefined` here because we want to manually clear our overrides
+    // On every pass to this function if we do not want the prompt to be overridden
+    prompts.override({ answer: overridePrompt || undefined });
+    return await prompts(
+      {
+        type: 'confirm',
+        name: 'answer',
+        message: 'Do you wish to operate on all config groups?',
+        initial: false,
+      },
+      { onCancel: () => false }
+    );
+  };
+}
+
 export function getAllConfigGroupDirPaths(): TE.TaskEither<Error, string[]> {
   return TE.tryCatch(async () => {
     const configGroupPaths = [] as string[];
 
-    const dotfilesDirPath = getPathToDotfilesDir();
+    const dotfilesDirPath = getPathToDotfilesDirPath();
     if (O.isNone(dotfilesDirPath)) {
       throw new Error('Could not find dotfiles directory');
     }
@@ -142,14 +152,27 @@ export function getAllConfigGroupDirPaths(): TE.TaskEither<Error, string[]> {
     }
 
     return configGroupPaths;
-  }, generateConfigGroupDirPathsRetrievalError());
+  }, getPathToDotfilesDirPathRetrievalError());
 }
 
-function generateConfigGroupDirPathsRetrievalError() {
+export function getPathToDotfilesDirPathRetrievalError() {
   return () =>
     new Error(
       chalk.bold.red(
-        'Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables? If so, then perhaps you have no configuration groups yet.'
+        `Could not find where you keep your configuration groups. Are you sure you have correctly set the required env variables (${SHELL_VARS_TO_CONFIG_GRP_DIRS})? If so, then perhaps you have no configuration groups yet.`
       )
     );
+}
+
+export function parseCmdOptions<PC extends ParserConfig>(parserConfig: PC) {
+  return (cmdOptions: string[]) => pipe(cmdOptions, parseArgv(parserConfig));
+}
+
+function getOptionsFromParserOutput<PO extends AnyParserOutput>(parserOutput: PO) {
+  return pipe(L.id<PO>(), L.prop('options')).get(parserOutput);
+}
+
+export function getParsedOptions<PC extends ParserConfig>(parserConfig: PC) {
+  return (cmdOptions: string[]) =>
+    pipe(parseArgv(parserConfig)(cmdOptions), getOptionsFromParserOutput);
 }

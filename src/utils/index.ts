@@ -1,16 +1,23 @@
 import * as A from 'fp-ts/lib/Array';
-import * as IO from 'fp-ts/lib/IO';
+import * as E from 'fp-ts/lib/Either';
+import * as O from 'fp-ts/lib/Option';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
+import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import boxen from 'boxen';
 
 import { pipe } from 'fp-ts/lib/function';
+import { exec } from 'child_process';
+import { getEnv } from '@lib/shellVarStrExpander';
+import { match, P } from 'ts-pattern';
+import { promisify } from 'util';
 import { isEmpty, slice } from 'ramda';
 import { chalk, fs as fsExtra } from 'zx';
 import { DestinationPath, SourcePath } from '@types';
 import { copyFile, link, symlink, unlink } from 'fs/promises';
+import { SHELL_EXEC_MOCK_ERROR_HOOK, SHELL_EXEC_MOCK_VAR_NAME } from '../constants';
 import {
   AggregateError,
   newAggregateError,
@@ -41,6 +48,18 @@ export function doesPathExist(
       throw new Error(`Could not find path to ${pathToEntity}`);
     },
     reason => newAggregateError(reason as Error)
+  );
+}
+
+export function doesPathExistSync(pathToEntity: string): E.Either<Error, string> {
+  return E.tryCatch(
+    () => {
+      const pathExists = fsExtra.pathExistsSync(pathToEntity);
+      if (pathExists) return pathToEntity;
+
+      throw new Error(`Could not find path to ${pathToEntity}`);
+    },
+    reason => reason as Error
   );
 }
 
@@ -140,4 +159,24 @@ export const normalizedCopy = async (src: SourcePath, dest: DestinationPath) =>
 
 export function createDirIfItDoesNotExist(dirPath: string): T.Task<void> {
   return async () => await fsExtra.ensureDir(dirPath);
+}
+
+export function execShellCmd(shellCmd: string, scope: string = '') {
+  const promisifiedExec = promisify(exec)(shellCmd, { shell: '/bin/bash' });
+
+  return pipe(
+    getEnv(`${SHELL_EXEC_MOCK_VAR_NAME}${scope}`),
+
+    O.fold(
+      () => promisifiedExec,
+
+      varValue =>
+        match(varValue)
+          .with(SHELL_EXEC_MOCK_ERROR_HOOK, () =>
+            Promise.reject(new Error(varValue))
+          )
+          .with(P.string, () => Promise.resolve({ stdout: varValue, stderr: '' }))
+          .otherwise(() => promisifiedExec)
+    )
+  );
 }

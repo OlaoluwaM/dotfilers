@@ -2,12 +2,14 @@ import * as A from 'fp-ts/lib/Array';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
+import * as RC from 'fp-ts/lib/Record';
 
 import { match, P } from 'ts-pattern';
 import { ExitCodes } from '../constants';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { removeEntityAt } from '../utils/index';
 import { lensProp, view } from 'ramda';
+import { optionConfigConstructor } from '@lib/arg-parser';
 import { DestinationPath, File, ConfigGroup, CmdResponse } from '@types';
 import {
   isNotIgnored,
@@ -16,16 +18,25 @@ import {
 } from '@app/configGroup';
 import {
   exitCli,
+  getParsedOptions,
   exitCliWithCodeOnly,
   getPathsToAllConfigGroupDirsInExistence,
 } from '@app/helpers';
 
-export default async function main(passedArguments: string[]) {
-  const configGroupNamesOrDirPaths = A.isEmpty(passedArguments)
-    ? await getPathsToAllConfigGroupDirsInExistence()
-    : passedArguments;
+interface ParsedCmdOptions {
+  readonly yes: boolean;
+}
 
-  // eslint-disable-next-line no-return-await
+export default async function main(
+  cmdArguments: string[],
+  cmdOptions: string[] = []
+) {
+  const parsedCmdOptions: ParsedCmdOptions = parseUnlinkCmdOptions(cmdOptions);
+
+  const configGroupNamesOrDirPaths = A.isEmpty(cmdArguments)
+    ? await getPathsToAllConfigGroupDirsInExistence(parsedCmdOptions.yes)
+    : cmdArguments;
+
   const cmdOutput = await match(configGroupNamesOrDirPaths)
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
     .with({ _tag: 'Left' }, (_, { left }) =>
@@ -38,10 +49,33 @@ export default async function main(passedArguments: string[]) {
   return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
+function parseUnlinkCmdOptions(cmdOptions: string[]): ParsedCmdOptions {
+  return pipe(
+    cmdOptions,
+    pipe(generateOptionConfig(), getParsedOptions),
+    RC.map(O.getOrElse(() => false))
+  );
+}
+
+function generateOptionConfig() {
+  return {
+    options: {
+      yes: optionConfigConstructor({
+        parser: () => true,
+        isFlag: true,
+        aliases: ['y'],
+      }),
+    },
+  };
+}
+
 async function unlinkCmd(
   configGroupNamesOrDirPaths: string[]
 ): Promise<CmdResponse<DestinationPath[]>> {
-  const configGroupsWithErrors = await createConfigGroupObjs(configGroupNamesOrDirPaths)();
+  const configGroupsWithErrors = await createConfigGroupObjs(
+    configGroupNamesOrDirPaths
+  )();
+
   const { left: configGroupCreationErrs, right: configGroups } =
     configGroupsWithErrors;
 
@@ -58,6 +92,7 @@ async function unlinkCmd(
     errors: [...deletionErrors, ...configGroupCreationErrs],
     output: deletionOutput,
     forTest: validConfigGroupDestinationPaths,
+    warnings: [],
   };
 }
 

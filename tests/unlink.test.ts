@@ -5,7 +5,6 @@ import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
 
 import path from 'path';
-import prompts from 'prompts';
 
 import { compose } from 'ramda';
 import { flow, pipe } from 'fp-ts/lib/function';
@@ -77,15 +76,19 @@ describe('Tests for the happy path', () => {
       process.env.DOTS = `${UNLINK_TEST_DATA_DIR}/valid-mock-dots`;
       process.env.DOTFILES = `${UNLINK_TEST_DATA_DIR}/valid-mock-dots`;
 
-      prompts.inject([true, true]);
-
-      const { forTest: configGroups } = await linkCmd([], mockOptions);
+      const { forTest: configGroups } = await linkCmd(
+        [],
+        mockOptions.concat(['-y'])
+      );
 
       const linkCmdDestinationPaths =
         getAllDestinationPathsFromConfigGroups(configGroups);
 
       // Act
-      const { errors, forTest: operatedOnDestinationPaths } = await unlinkCmd([]);
+      const { errors, forTest: operatedOnDestinationPaths } = await unlinkCmd(
+        [],
+        ['--yes']
+      );
 
       const areAllDestinationFilesPresentAtTheirDestinationPaths =
         await checkIfAllPathsAreValid(operatedOnDestinationPaths)();

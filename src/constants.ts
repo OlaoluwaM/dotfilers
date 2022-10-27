@@ -14,6 +14,10 @@ export const SHELL_VARS_TO_CONFIG_GRP_DIRS = ['$DOTFILES', '$DOTS'] as const;
 
 export const SHELL_VARS_TO_CONFIG_GRP_DIRS_STR = '$DOTFILES or $DOTS';
 
+export const SHELL_EXEC_MOCK_VAR_NAME = 'SHELL_MOCK_' as const;
+
+export const SHELL_EXEC_MOCK_ERROR_HOOK = '$$ERROR$$';
+
 // This isn't in the `utils` file to avoid a cyclic dependency error
 export function getAbsolutePathsForFile(fileUrl: string) {
   return pipe(fileUrl, fileURLToPath, (__filename: string) => ({

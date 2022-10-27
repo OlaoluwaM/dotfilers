@@ -22,7 +22,7 @@ import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
 import { compose, lensProp, omit, pick, view } from 'ramda';
 import { readJson, doesPathExist, getOnlyValueFromEntriesArr } from '@utils/index';
 import {
-  getPathToDotfilesDir,
+  getPathToDotfilesDirPath,
   getAllOperableFilesFromConfigGroupDir,
 } from './helpers';
 import {
@@ -77,7 +77,7 @@ export function generateAbsolutePathToConfigGroupDir(
     O.fromPredicate(path.isAbsolute),
     O.match(
       flow(
-        getPathToDotfilesDir,
+        getPathToDotfilesDirPath,
         O.map(dotfilesDirPath => path.join(dotfilesDirPath, configGroupNameOrPath))
       ),
       O.some
