@@ -71,18 +71,22 @@ export type isOptional<Structure, MemberUnion extends keyof Structure> = Omit<
 > &
   Partial<Pick<Structure, MemberUnion>>;
 
+export type CurriedReturnType<Fn> = Fn extends AnyFunction
+  ? CurriedReturnType<ReturnType<Fn>>
+  : Fn;
+
 export interface CmdResponse<T> {
   errors: AggregateError[] | string[];
   warnings: string[];
   output: string[];
-  forTest: T; // NOTE: This return is for testing purposes only
+  testOutput: T; // NOTE: This return is for testing purposes only
 }
 
 export type PureCmdResponse = Omit<CmdResponse<unknown>, 'forTest'>;
 
-export interface Cmd<RT> {
-  (args: PositionalArgs, cmdOptions: CmdOptions): T.Task<
-    IO.IO<never> | CmdResponse<RT>
+export interface Cmd {
+  (cmdArguments: PositionalArgs, cmdOptions: CmdOptions): T.Task<
+    IO.IO<never> | PureCmdResponse
   >;
 }
 

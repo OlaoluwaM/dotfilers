@@ -15,7 +15,7 @@ import { match, P } from 'ts-pattern';
 import { promisify } from 'util';
 import { isEmpty, slice } from 'ramda';
 import { chalk, fs as fsExtra } from 'zx';
-import { DestinationPath, SourcePath } from '@types';
+import { AnyFunction, DestinationPath, SourcePath } from '@types';
 import { copyFile, link, symlink, unlink } from 'fs/promises';
 import { SHELL_EXEC_MOCK_ERROR_HOOK, SHELL_EXEC_MOCK_VAR_NAME } from '../constants';
 import {
@@ -179,4 +179,10 @@ export function execShellCmd(shellCmd: string, scope: string = '') {
           .otherwise(() => promisifiedExec)
     )
   );
+}
+
+export function bind<Fn extends AnyFunction>(fn: Fn) {
+  return (...argsToBind: Parameters<Fn>) =>
+    () =>
+      fn(...argsToBind) as ReturnType<Fn>;
 }

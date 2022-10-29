@@ -14,7 +14,7 @@ import { concatAll } from 'fp-ts/lib/Monoid';
 import { fs as fsExtra } from 'zx';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { lstat, stat, writeFile } from 'fs/promises';
-import { ConfigGroup, DestinationPath, File, SourcePath } from '@types';
+import { AnyFunction, ConfigGroup, DestinationPath, File, SourcePath } from '@types';
 
 export async function isSymlink(filePath: DestinationPath) {
   try {
@@ -149,3 +149,6 @@ export function normalizeStdout(stdout: string) {
 }
 
 export const NEW_LINE_CHAR_REGEX = /\r?\n|\r/g;
+
+export type ExcludeFn<T> = T extends AnyFunction ? never : T;
+export type ExtractFn<T> = T extends AnyFunction ? T : never;

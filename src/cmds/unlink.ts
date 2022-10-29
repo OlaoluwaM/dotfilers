@@ -1,20 +1,28 @@
 import * as A from 'fp-ts/lib/Array';
+import * as L from 'monocle-ts/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
-import * as TE from 'fp-ts/lib/TaskEither';
 import * as RC from 'fp-ts/lib/Record';
+import * as TE from 'fp-ts/lib/TaskEither';
 
 import { match, P } from 'ts-pattern';
 import { ExitCodes } from '../constants';
 import { pipe, flow } from 'fp-ts/lib/function';
-import { removeEntityAt } from '../utils/index';
-import { lensProp, view } from 'ramda';
+import { bind, removeEntityAt } from '../utils/index';
 import { optionConfigConstructor } from '@lib/arg-parser';
-import { DestinationPath, File, ConfigGroup, CmdResponse } from '@types';
+import {
+  File,
+  CmdOptions,
+  ConfigGroup,
+  CmdResponse,
+  PositionalArgs,
+  DestinationPath,
+  CurriedReturnType,
+} from '@types';
 import {
   isNotIgnored,
   getFilesFromConfigGroup,
-  default as createConfigGroupObjs,
+  default as createConfigGroups,
 } from '@app/configGroup';
 import {
   exitCli,
@@ -27,26 +35,32 @@ interface ParsedCmdOptions {
   readonly yes: boolean;
 }
 
-export default async function main(
-  cmdArguments: string[],
-  cmdOptions: string[] = []
+export default function main(
+  cmdArguments: PositionalArgs | [],
+  cmdOptions: CmdOptions | []
 ) {
-  const parsedCmdOptions: ParsedCmdOptions = parseUnlinkCmdOptions(cmdOptions);
+  return pipe(
+    TE.of(cmdOptions),
+    TE.map(parseUnlinkCmdOptions),
 
-  const configGroupNamesOrDirPaths = A.isEmpty(cmdArguments)
-    ? await getPathsToAllConfigGroupDirsInExistence(parsedCmdOptions.yes)
-    : cmdArguments;
+    TE.chain(({ yes }) =>
+      A.isEmpty(cmdArguments)
+        ? getPathsToAllConfigGroupDirsInExistence(yes)
+        : TE.right(cmdArguments)
+    ),
 
-  const cmdOutput = await match(configGroupNamesOrDirPaths)
-    .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
-    .with({ _tag: 'Left' }, (_, { left }) =>
-      exitCli(left.message, ExitCodes.GENERAL)
+    TE.foldW(
+      issue => async () =>
+        match(issue)
+          .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
+          .with(P.instanceOf(Error), (_, err) =>
+            exitCli(err.message, ExitCodes.GENERAL)
+          )
+          .exhaustive(),
+
+      configGroupNames => unlinkCmd(configGroupNames)
     )
-    .with({ _tag: 'Right' }, (_, { right }) => unlinkCmd(right))
-    .with(P.array(P.string), (_, configGroupNames) => unlinkCmd(configGroupNames))
-    .exhaustive();
-
-  return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
+  );
 }
 
 function parseUnlinkCmdOptions(cmdOptions: string[]): ParsedCmdOptions {
@@ -69,29 +83,59 @@ function generateOptionConfig() {
   };
 }
 
-async function unlinkCmd(
-  configGroupNamesOrDirPaths: string[]
-): Promise<CmdResponse<DestinationPath[]>> {
-  const configGroupsWithErrors = await createConfigGroupObjs(
-    configGroupNamesOrDirPaths
-  )();
+interface UnlinkOperationResponse {
+  readonly configGroupCreationResults: Awaited<
+    CurriedReturnType<typeof createConfigGroups>
+  >;
 
-  const { left: configGroupCreationErrs, right: configGroups } =
-    configGroupsWithErrors;
+  readonly unlinkOperationResult: Awaited<
+    CurriedReturnType<typeof undoOperationPerformedByLinkCmd>
+  >;
 
-  const validConfigGroupDestinationPaths =
-    getDestinationPathsForAllNonIgnoredFiles(configGroups);
+  readonly validDestinationPaths: ReturnType<
+    typeof getDestinationPathsForAllNonIgnoredFiles
+  >;
+}
 
-  const deletionOperationFeedback = await pipe(
-    validConfigGroupDestinationPaths,
-    undoOperationPerformedByLinkCmd
-  )();
-  const { left: deletionErrors, right: deletionOutput } = deletionOperationFeedback;
+function unlinkCmd(configGroupNamesOrDirPaths: string[]) {
+  return pipe(
+    T.Do,
+
+    T.bind(
+      'configGroupCreationResults',
+      bind(createConfigGroups)(configGroupNamesOrDirPaths)
+    ),
+
+    T.let(
+      'validDestinationPaths',
+      ({ configGroupCreationResults: { right: configGroups } }) =>
+        getDestinationPathsForAllNonIgnoredFiles(configGroups)
+    ),
+
+    T.bind('unlinkOperationResult', ({ validDestinationPaths }) =>
+      undoOperationPerformedByLinkCmd(validDestinationPaths)
+    ),
+
+    T.map(generateCmdResponse)
+  );
+}
+
+function generateCmdResponse(
+  unlinkOperationResponse: UnlinkOperationResponse
+): CmdResponse<DestinationPath[]> {
+  const {
+    configGroupCreationResults,
+    validDestinationPaths: validConfigGroupDestinationPaths,
+    unlinkOperationResult,
+  } = unlinkOperationResponse;
+
+  const { left: configGroupCreationErrs } = configGroupCreationResults;
+  const { left: deletionErrors, right: deletionOutput } = unlinkOperationResult;
 
   return {
     errors: [...deletionErrors, ...configGroupCreationErrs],
     output: deletionOutput,
-    forTest: validConfigGroupDestinationPaths,
+    testOutput: validConfigGroupDestinationPaths,
     warnings: [],
   };
 }
@@ -113,8 +157,8 @@ function getDestinationPathForFileObjsThatAreNotIgnored(configGroupFileObj: File
 }
 
 function getDestinationPathForFileObj(configGroupFileObj: File) {
-  const destinationPathLens = lensProp<File, 'destinationPath'>('destinationPath');
-  return view(destinationPathLens, configGroupFileObj);
+  const DestinationPathLens = pipe(L.id<File>(), L.prop('destinationPath'));
+  return pipe(configGroupFileObj, DestinationPathLens.get);
 }
 
 function undoOperationPerformedByLinkCmd(destinationPaths: string[]) {

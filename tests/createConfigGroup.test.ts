@@ -10,14 +10,20 @@ import { rm } from 'fs/promises';
 import { pipe } from 'fp-ts/lib/function';
 import { fs as fsExtra } from 'zx';
 import { TEST_DATA_DIR_PREFIX } from './setup';
+import { toPositionalArgs, CurriedReturnType } from '@types';
 import { default as createConfigGroupCmd } from '@cmds/createConfigGroup';
 import { DEFAULT_DEST_RECORD_FILE_CONTENTS } from '@app/configGroup';
-import { defaultDestRecordEq, generatePath } from './helpers';
+import { defaultDestRecordEq, ExcludeFn, ExtractFn, generatePath } from './helpers';
 import {
   ExitCodes,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
   SHELL_VARS_TO_CONFIG_GRP_DIRS_STR,
 } from '../src/constants';
+
+type CmdOutput = Awaited<CurriedReturnType<typeof createConfigGroupCmd>>;
+
+type CmdDataOutput = ExcludeFn<CmdOutput>;
+type ProcessExitFn = ExtractFn<CmdOutput>;
 
 const CMD_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/create-config-grp`;
 
@@ -62,13 +68,18 @@ describe('Tests for the happy path', () => {
       process.env[envVarName] = '';
 
       // Act
+      const cmdOutput = await createConfigGroupCmd(
+        toPositionalArgs(
+          nonExistingConfigGroupNames.concat(NAMES_OF_EXISTING_CONFIG_GRPS)
+        ),
+        []
+      )();
+
       const {
         errors,
         warnings,
-        forTest: configGroupDirPaths,
-      } = await createConfigGroupCmd(
-        nonExistingConfigGroupNames.concat(NAMES_OF_EXISTING_CONFIG_GRPS)
-      );
+        testOutput: configGroupDirPaths,
+      } = cmdOutput as CmdDataOutput;
 
       const numOfCreatedConfigGroups = await pipe(
         configGroupDirPaths,
@@ -101,11 +112,16 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
+    const cmdOutput = await createConfigGroupCmd(
+      toPositionalArgs([nameOfMockNestedConfigGroup]),
+      []
+    )();
+
     const {
       errors,
       warnings,
-      forTest: configGroupDirPaths,
-    } = await createConfigGroupCmd([nameOfMockNestedConfigGroup]);
+      testOutput: configGroupDirPaths,
+    } = cmdOutput as CmdDataOutput;
 
     const nestedConfigGroupHasValidDefaultDestinationRecordFile = await pipe(
       path.join(expectedPathToNestedConfigGroup, CONFIG_GRP_DEST_RECORD_FILE_NAME),
@@ -130,7 +146,9 @@ describe('Tests for everything but the happy path', () => {
   test('Should ensure that the createConfigGroup command exits gracefully if no arguments are passed', async () => {
     // Arrange
     // Act
-    await createConfigGroupCmd([]);
+    const cmdOutput = (await createConfigGroupCmd([], [])()) as ProcessExitFn;
+
+    cmdOutput();
 
     // Assert
     expect(process.exit).toHaveBeenCalledWith(ExitCodes.GENERAL);
@@ -154,16 +172,17 @@ describe('Tests for everything but the happy path', () => {
     );
 
     // Act
-    const {
-      errors,
-      warnings,
-      output: cmdOutput,
-    } = await createConfigGroupCmd(mockConfigGroupNames);
+    const cmdOutput = await createConfigGroupCmd(
+      toPositionalArgs(mockConfigGroupNames),
+      []
+    )();
+
+    const { errors, warnings, output: cmdResponse } = cmdOutput as CmdDataOutput;
 
     // Assert
     expect(errors).toBeArrayOfSize(mockConfigGroupNames.length);
     expect(warnings).toBeEmpty();
-    expect(cmdOutput).toBeEmpty();
+    expect(cmdResponse).toBeEmpty();
 
     // Cleanup
     process.env.DOTS = MOCK_DOTS_DIR;

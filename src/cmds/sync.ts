@@ -8,10 +8,10 @@ import * as TE from 'fp-ts/lib/TaskEither';
 import { ExitCodes } from '../constants';
 import { NonEmptyArray } from 'fp-ts/lib/NonEmptyArray';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
+import { CmdOptions, CmdResponse } from '@types';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import { doesPathExistSync, execShellCmd } from '../utils/index';
 import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
-import { Cmd, CmdOptions, CmdResponse, PositionalArgs } from '@types';
 import {
   exitCli,
   getParsedOptions,
@@ -31,8 +31,8 @@ export interface GitInstance {
 
 // EXPORTED FOR TESTING PURPOSES ONLY
 // Ideally, we should have the gitInstance come as the last parameter, but it's more general than the cmdOptions parameter
-export function _main(gitInstance: E.Either<Error, GitInstance>): Cmd<string> {
-  return (_: PositionalArgs, cmdOptions: CmdOptions) =>
+export function _main(gitInstance: E.Either<Error, GitInstance>) {
+  return (_: [], cmdOptions: CmdOptions | []) =>
     pipe(
       gitInstance,
       TE.fromEither,
@@ -122,7 +122,7 @@ function handleSyncSuccessOutput(git: SimpleGit) {
     async () => {
       switch (dotfilesRepoStatus) {
         case SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES:
-          return constructSyncCmdSuccessResponse(
+          return constructSyncCmdCmdOutput(
             SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES
           );
 
@@ -131,7 +131,7 @@ function handleSyncSuccessOutput(git: SimpleGit) {
           // Since the enclosing function will be invoked within a `fold` we can perform a side effect
           return await pipe(
             performGitSyncOps(git)(dotfilesDirPath), // Side effect
-            RT.map(constructSyncCmdSuccessResponse)
+            RT.map(constructSyncCmdCmdOutput)
           )(commitMsg)();
         }
 
@@ -186,18 +186,16 @@ function constructSyncCmdErrorResponse(
     warnings: [],
     errors: [syncCmdStateVal],
     output: [],
-    forTest: '',
+    testOutput: '',
   };
 }
 
-function constructSyncCmdSuccessResponse(
-  syncCmdStateVal: string
-): CmdResponse<string> {
+function constructSyncCmdCmdOutput(syncCmdStateVal: string): CmdResponse<string> {
   return {
     warnings: [],
     errors: [],
     output: [syncCmdStateVal],
-    forTest: '',
+    testOutput: '',
   };
 }
 

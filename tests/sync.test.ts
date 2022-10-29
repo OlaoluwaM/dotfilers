@@ -15,8 +15,8 @@ import { execShellCmd } from '@utils/index';
 import { Brand, createBrander } from '@lib/brand';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { TEST_DATA_DIR_PREFIX } from './setup';
-import { createFile, normalizeStdout } from './helpers';
-import { CmdResponse, toCmdOptions, toPositionalArgs } from '@types';
+import { toCmdOptions, CurriedReturnType } from '@types';
+import { createFile, ExcludeFn, ExtractFn, normalizeStdout } from './helpers';
 import {
   ExitCodes,
   SHELL_EXEC_MOCK_VAR_NAME,
@@ -34,6 +34,11 @@ interface SyncCmd {
   syncCmd: ReturnType<typeof _main>;
   mockedSimpleGitInstance: SimpleGit | Error;
 }
+
+type CmdOutput = Awaited<CurriedReturnType<typeof _main>>;
+
+type CmdDataOutput = ExcludeFn<CmdOutput>;
+type ProcessExitFn = ExtractFn<CmdOutput>;
 
 type RepoPath = Brand<string, 'Repo Path'>;
 type UpstreamPath = Brand<string, 'Upstream Path'>;
@@ -161,25 +166,26 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd(toPositionalArgs([]), toCmdOptions([]))();
+    const cmdOutput = await syncCmd([], [])();
 
     // Assert
-    expect(outputVal).not.toBeInstanceOf(Function);
+    expect(cmdOutput).not.toBeInstanceOf(Function);
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).commit).toHaveBeenCalledWith(
       defaultCommitMsg
     );
+
     expect((mockedSimpleGitInstance as SimpleGit).add).toHaveBeenCalledWith([
       VALID_WORKING_GIT_REPO_DIR_PATH,
       '--all',
     ]);
 
-    expect(outputVal as CmdResponse<string>).toMatchObject<CmdResponse<string>>({
+    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
       errors: [],
       warnings: [],
-      forTest: '',
+      testOutput: '',
       output: [defaultCommitMsg],
     });
 
@@ -226,28 +232,26 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd(
-      toPositionalArgs([]),
-      toCmdOptions(['-m', customCommitMsg])
-    )();
+    const cmdOutput = await syncCmd([], toCmdOptions(['-m', customCommitMsg]))();
 
     // Assert
-    expect(outputVal).not.toBeInstanceOf(Function);
+    expect(cmdOutput).not.toBeInstanceOf(Function);
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).commit).toHaveBeenCalledWith(
       customCommitMsg
     );
+
     expect((mockedSimpleGitInstance as SimpleGit).add).toHaveBeenCalledWith([
       VALID_WORKING_GIT_REPO_DIR_PATH,
       '--all',
     ]);
 
-    expect(outputVal as CmdResponse<string>).toMatchObject<CmdResponse<string>>({
+    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
       errors: [],
       warnings: [],
-      forTest: '',
+      testOutput: '',
       output: [customCommitMsg],
     });
 
@@ -294,13 +298,10 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd(
-      toPositionalArgs([]),
-      toCmdOptions(['-m', ''])
-    )();
+    const cmdOutput = await syncCmd([], toCmdOptions(['-m', '']))();
 
     // Assert
-    expect(outputVal).not.toBeInstanceOf(Function);
+    expect(cmdOutput).not.toBeInstanceOf(Function);
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).toHaveBeenCalled();
@@ -312,10 +313,10 @@ describe('Tests for the happy path', () => {
       '--all',
     ]);
 
-    expect(outputVal as CmdResponse<string>).toMatchObject<CmdResponse<string>>({
+    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
       errors: [],
       warnings: [],
-      forTest: '',
+      testOutput: '',
       output: [expectedCommitMessage],
     });
 
@@ -342,23 +343,20 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd(
-      toPositionalArgs([]),
-      toCmdOptions(['-m', ''])
-    )();
+    const cmdOutput = await syncCmd([], toCmdOptions(['-m', '']))();
 
     // Assert
-    expect(outputVal).not.toBeInstanceOf(Function);
+    expect(cmdOutput).not.toBeInstanceOf(Function);
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).commit).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).add).not.toHaveBeenCalled();
 
-    expect(outputVal as CmdResponse<string>).toMatchObject<CmdResponse<string>>({
+    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
       errors: [],
       warnings: [],
-      forTest: '',
+      testOutput: '',
       output: [SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES],
     });
 
@@ -376,11 +374,12 @@ describe('Tests for everything but the happy path', () => {
     );
 
     // Act
-    const outputVal = await syncCmd(toPositionalArgs([]), toCmdOptions([]))();
-    (outputVal as Function)(); // We expect output to be of type IO<never>
+    const cmdOutput = (await syncCmd([], [])()) as ProcessExitFn;
+
+    cmdOutput();
 
     // Assert
-    expect(outputVal).toBeInstanceOf(Function);
+    expect(cmdOutput).toBeInstanceOf(Function);
     expect(process.exit).toHaveBeenCalledWith(ExitCodes.GENERAL);
     expect(mockedSimpleGitInstance).toBeInstanceOf(Error);
   });
@@ -393,20 +392,20 @@ describe('Tests for everything but the happy path', () => {
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
 
     // Act
-    const outputVal = await syncCmd(toPositionalArgs([]), toCmdOptions([]))();
+    const cmdOutput = await syncCmd([], [])();
 
     // Assert
-    expect(outputVal).not.toBeInstanceOf(Function);
+    expect(cmdOutput).not.toBeInstanceOf(Function);
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).commit).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).add).not.toHaveBeenCalled();
 
-    expect(outputVal as CmdResponse<string>).toMatchObject<CmdResponse<string>>({
+    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
       errors: [SYNC_CMD_STATES.DOTFILES_DIR_IS_NOT_GIT_REPO],
       warnings: [],
-      forTest: '',
+      testOutput: '',
       output: [],
     });
   });
@@ -419,20 +418,20 @@ describe('Tests for everything but the happy path', () => {
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
 
     // Act
-    const outputVal = await syncCmd(toPositionalArgs([]), toCmdOptions([]))();
+    const cmdOutput = await syncCmd([], [])();
 
     // Assert
-    expect(outputVal).not.toBeInstanceOf(Function);
+    expect(cmdOutput).not.toBeInstanceOf(Function);
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).commit).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).add).not.toHaveBeenCalled();
 
-    expect(outputVal as CmdResponse<string>).toMatchObject<CmdResponse<string>>({
+    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
       errors: [SYNC_CMD_STATES.GIT_IS_NOT_INSTALLED],
       warnings: [],
-      forTest: '',
+      testOutput: '',
       output: [],
     });
   });

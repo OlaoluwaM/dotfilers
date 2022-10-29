@@ -1,4 +1,3 @@
-import * as E from 'fp-ts/lib/Either';
 import * as L from 'monocle-ts/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
@@ -11,7 +10,6 @@ import path from 'path';
 import prompts from 'prompts';
 
 import { not } from 'fp-ts/lib/Predicate';
-import { match } from 'ts-pattern';
 import { flow, pipe } from 'fp-ts/lib/function';
 import { fs as fsExtra, chalk } from 'zx';
 import { default as readdirp, ReaddirpOptions } from 'readdirp';
@@ -20,10 +18,7 @@ import {
   isValidShellExpansion,
   expandShellVariablesInString,
 } from '@lib/shellVarStrExpander';
-import parseArgv, {
-  AnyParserOutput,
-  ParserConfig,
-} from '@lib/arg-parser/';
+import parseArgv, { AnyParserOutput, ParserConfig } from '@lib/arg-parser/';
 import {
   ExitCodes,
   SHELL_VARS_TO_CONFIG_GRP_DIRS,
@@ -100,18 +95,16 @@ export function getPathToDotfilesDirPath() {
   );
 }
 
-export async function getPathsToAllConfigGroupDirsInExistence(
-  overridePrompt: boolean
-): Promise<ExitCodes.OK | E.Either<Error, string[]>> {
-  return await pipe(
+export function getPathsToAllConfigGroupDirsInExistence(overridePrompt: boolean) {
+  return pipe(
     promptForConfirmation(overridePrompt),
-    T.map(({ answer }: { answer: boolean }) =>
-      match(answer)
-        .with(false, () => ExitCodes.OK as const)
-        .with(true, getAllConfigGroupDirPaths())
-        .exhaustive()
-    )
-  )();
+    TE.fromTask,
+    TE.filterOrElse(
+      ({ answer }: { answer: boolean }) => answer,
+      () => ExitCodes.OK as const
+    ),
+    TE.chainW(getAllConfigGroupDirPaths)
+  );
 }
 
 function promptForConfirmation(overridePrompt: boolean) {
