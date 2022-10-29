@@ -1,5 +1,5 @@
-import * as T from 'fp-ts/lib/Task';
 import * as IO from 'fp-ts/lib/IO';
+import * as TE from 'fp-ts/lib/TaskEither';
 
 import { EntryInfo } from 'readdirp';
 import { AggregateError } from '@utils/AggregateError';
@@ -75,18 +75,26 @@ export type CurriedReturnType<Fn> = Fn extends AnyFunction
   ? CurriedReturnType<ReturnType<Fn>>
   : Fn;
 
-export interface CmdResponse<T> {
+export interface CmdResponseWithTestOutput<T> {
   errors: AggregateError[] | string[];
   warnings: string[];
   output: string[];
-  testOutput: T; // NOTE: This return is for testing purposes only
+  testOutput: T; // NOTE: This property is for testing purposes only
 }
 
-export type PureCmdResponse = Omit<CmdResponse<unknown>, 'forTest'>;
+export type CmdResponse = Omit<CmdResponseWithTestOutput<unknown>, 'testOutput'>;
 
-export interface Cmd {
-  (cmdArguments: PositionalArgs, cmdOptions: CmdOptions): T.Task<
-    IO.IO<never> | PureCmdResponse
+export interface CmdFnWithTestOutput<T> {
+  (cmdArguments: PositionalArgs, cmdOptions: CmdOptions): TE.TaskEither<
+    IO.IO<never>,
+    CmdResponseWithTestOutput<T>
+  >;
+}
+
+export interface CmdFn {
+  (cmdArguments: PositionalArgs, cmdOptions: CmdOptions): TE.TaskEither<
+    IO.IO<never>,
+    CmdResponse
   >;
 }
 

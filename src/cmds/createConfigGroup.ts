@@ -12,7 +12,11 @@ import { match, P } from 'ts-pattern';
 import { writeFile } from 'fs/promises';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { newAggregateError } from '@utils/AggregateError';
-import { CmdResponse, PositionalArgs } from '../types/index';
+import {
+  PositionalArgs,
+  CmdFnWithTestOutput,
+  CmdResponseWithTestOutput,
+} from '../types/index';
 import { CONFIG_GRP_DEST_RECORD_FILE_NAME, ExitCodes } from '../constants';
 import { bind, createDirIfItDoesNotExist, doesPathExist } from '@utils/index';
 import {
@@ -20,10 +24,15 @@ import {
   generateAbsolutePathToConfigGroupDir,
 } from '@app/configGroup';
 
-export default function main(cmdArguments: PositionalArgs | [], _: []) {
+export default function main(
+  cmdArguments: PositionalArgs | [],
+  _: []
+): ReturnType<CmdFnWithTestOutput<string[]>> {
   return match(cmdArguments)
-    .with([], () => T.of(exitCli(generateCmdFatalErrMsg(), ExitCodes.GENERAL)))
-    .with(P.array(P.string), (__, value) => createConfigGroupDir(value))
+    .with([], () => TE.left(exitCli(generateCmdFatalErrMsg(), ExitCodes.GENERAL)))
+    .with(P.array(P.string), (__, value) =>
+      pipe(createConfigGroupDir(value), TE.rightTask)
+    )
     .exhaustive();
 }
 
@@ -39,9 +48,7 @@ interface ConfigGroupDirCreationResponse {
   readonly configGroupDirCreationResult: S.Separated<string[], string[]>;
 }
 
-function createConfigGroupDir(
-  configGroupNames: string[]
-) {
+function createConfigGroupDir(configGroupNames: string[]) {
   return pipe(
     T.Do,
 
@@ -69,7 +76,7 @@ function createConfigGroupDir(
 
 function generateCmdResponse(
   configGroupDirCreationResponse: ConfigGroupDirCreationResponse
-): CmdResponse<string[]> {
+): CmdResponseWithTestOutput<string[]> {
   const { configGroupDirCreationResult, configGroupPathGenerationResult } =
     configGroupDirCreationResponse;
 

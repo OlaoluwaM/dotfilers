@@ -5,6 +5,7 @@ import * as L from 'monocle-ts/Lens';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
 import * as RA from 'fp-ts/lib/ReadonlyArray';
+import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
 import fsPromise from 'fs/promises';
@@ -12,11 +13,11 @@ import fsPromise from 'fs/promises';
 import { jest } from '@jest/globals';
 import { SimpleGit } from 'simple-git';
 import { execShellCmd } from '@utils/index';
+import { toCmdOptions } from '@types';
 import { Brand, createBrander } from '@lib/brand';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { TEST_DATA_DIR_PREFIX } from './setup';
-import { toCmdOptions, CurriedReturnType } from '@types';
-import { createFile, ExcludeFn, ExtractFn, normalizeStdout } from './helpers';
+import { createFile, manualFail, normalizeStdout } from './helpers';
 import {
   ExitCodes,
   SHELL_EXEC_MOCK_VAR_NAME,
@@ -34,11 +35,6 @@ interface SyncCmd {
   syncCmd: ReturnType<typeof _main>;
   mockedSimpleGitInstance: SimpleGit | Error;
 }
-
-type CmdOutput = Awaited<CurriedReturnType<typeof _main>>;
-
-type CmdDataOutput = ExcludeFn<CmdOutput>;
-type ProcessExitFn = ExtractFn<CmdOutput>;
 
 type RepoPath = Brand<string, 'Repo Path'>;
 type UpstreamPath = Brand<string, 'Upstream Path'>;
@@ -166,10 +162,30 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const cmdOutput = await syncCmd([], [])();
+    const cmdOutputTE = syncCmd([], []);
 
     // Assert
-    expect(cmdOutput).not.toBeInstanceOf(Function);
+    await pipe(
+      cmdOutputTE,
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail("Expected 'CmdResponse' object but got a CLI exit function")
+          ),
+
+        cmdOutput => async () => {
+          expect(cmdOutput).not.toBeInstanceOf(Function);
+
+          expect(cmdOutput).toMatchObject({
+            errors: [],
+            warnings: [],
+            testOutput: '',
+            output: [defaultCommitMsg],
+          });
+        }
+      )
+    )();
+
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).toHaveBeenCalled();
@@ -181,13 +197,6 @@ describe('Tests for the happy path', () => {
       VALID_WORKING_GIT_REPO_DIR_PATH,
       '--all',
     ]);
-
-    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
-      errors: [],
-      warnings: [],
-      testOutput: '',
-      output: [defaultCommitMsg],
-    });
 
     expect(await doesCreatedFileExistInUpstream()).toBeTrue();
 
@@ -232,10 +241,31 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const cmdOutput = await syncCmd([], toCmdOptions(['-m', customCommitMsg]))();
+    const cmdOutputTE = syncCmd([], toCmdOptions(['-m', customCommitMsg]));
 
     // Assert
-    expect(cmdOutput).not.toBeInstanceOf(Function);
+    await pipe(
+      cmdOutputTE,
+
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail("Expected 'CmdResponse' object but got a CLI exit function")
+          ),
+
+        cmdOutput => async () => {
+          expect(cmdOutput).not.toBeInstanceOf(Function);
+
+          expect(cmdOutput).toMatchObject({
+            errors: [],
+            warnings: [],
+            testOutput: '',
+            output: [customCommitMsg],
+          });
+        }
+      )
+    )();
+
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).toHaveBeenCalled();
@@ -247,13 +277,6 @@ describe('Tests for the happy path', () => {
       VALID_WORKING_GIT_REPO_DIR_PATH,
       '--all',
     ]);
-
-    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
-      errors: [],
-      warnings: [],
-      testOutput: '',
-      output: [customCommitMsg],
-    });
 
     expect(await doesCreatedFileExistInUpstream()).toBeTrue();
 
@@ -298,10 +321,31 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const cmdOutput = await syncCmd([], toCmdOptions(['-m', '']))();
+    const cmdOutputTE = syncCmd([], toCmdOptions(['-m', '']));
 
     // Assert
-    expect(cmdOutput).not.toBeInstanceOf(Function);
+    await pipe(
+      cmdOutputTE,
+
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail("Expected 'CmdResponse' object but got a CLI exit function")
+          ),
+
+        cmdOutput => async () => {
+          expect(cmdOutput).not.toBeInstanceOf(Function);
+
+          expect(cmdOutput).toMatchObject({
+            errors: [],
+            warnings: [],
+            testOutput: '',
+            output: [expectedCommitMessage],
+          });
+        }
+      )
+    )();
+
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).toHaveBeenCalled();
@@ -312,13 +356,6 @@ describe('Tests for the happy path', () => {
       VALID_WORKING_GIT_REPO_DIR_PATH,
       '--all',
     ]);
-
-    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
-      errors: [],
-      warnings: [],
-      testOutput: '',
-      output: [expectedCommitMessage],
-    });
 
     expect(await doesCreatedFileExistInUpstream()).toBeTrue();
 
@@ -343,22 +380,36 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const cmdOutput = await syncCmd([], toCmdOptions(['-m', '']))();
+    const cmdOutputTE = syncCmd([], toCmdOptions(['-m', '']));
 
     // Assert
-    expect(cmdOutput).not.toBeInstanceOf(Function);
+    await pipe(
+      cmdOutputTE,
+
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail("Expected 'CmdResponse' object but got a CLI exit function")
+          ),
+
+        cmdOutput => async () => {
+          expect(cmdOutput).not.toBeInstanceOf(Function);
+
+          expect(cmdOutput).toMatchObject({
+            errors: [],
+            warnings: [],
+            testOutput: '',
+            output: [SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES],
+          });
+        }
+      )
+    )();
+
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).commit).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).add).not.toHaveBeenCalled();
-
-    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
-      errors: [],
-      warnings: [],
-      testOutput: '',
-      output: [SYNC_CMD_STATES.DOTFILES_DIR_HAS_NO_CHANGES],
-    });
 
     expect(await retrieveAllRepoFiles()).toIncludeSameMembers(
       await retrieveAllRepoUpstreamFiles()
@@ -374,12 +425,23 @@ describe('Tests for everything but the happy path', () => {
     );
 
     // Act
-    const cmdOutput = (await syncCmd([], [])()) as ProcessExitFn;
-
-    cmdOutput();
+    const cmdOutputTE = syncCmd([], []);
 
     // Assert
-    expect(cmdOutput).toBeInstanceOf(Function);
+    await pipe(
+      cmdOutputTE,
+      TE.fold(
+        exitFn => async () => exitFn(),
+
+        () => () =>
+          Promise.reject(
+            manualFail(
+              "Expected a CLI exit function, but got a 'CmdResponse' object instead"
+            )
+          )
+      )
+    )();
+
     expect(process.exit).toHaveBeenCalledWith(ExitCodes.GENERAL);
     expect(mockedSimpleGitInstance).toBeInstanceOf(Error);
   });
@@ -392,22 +454,35 @@ describe('Tests for everything but the happy path', () => {
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
 
     // Act
-    const cmdOutput = await syncCmd([], [])();
+    const cmdOutputTE = syncCmd([], []);
 
     // Assert
-    expect(cmdOutput).not.toBeInstanceOf(Function);
+    await pipe(
+      cmdOutputTE,
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail("Expected 'CmdResponse' object but got a CLI exit function")
+          ),
+
+        cmdOutput => async () => {
+          expect(cmdOutput).not.toBeInstanceOf(Function);
+
+          expect(cmdOutput).toMatchObject({
+            errors: [SYNC_CMD_STATES.DOTFILES_DIR_IS_NOT_GIT_REPO],
+            warnings: [],
+            testOutput: '',
+            output: [],
+          });
+        }
+      )
+    )();
+
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).commit).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).add).not.toHaveBeenCalled();
-
-    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
-      errors: [SYNC_CMD_STATES.DOTFILES_DIR_IS_NOT_GIT_REPO],
-      warnings: [],
-      testOutput: '',
-      output: [],
-    });
   });
 
   test('Should ensure that the sync command exits gracefully if git is not installed?', async () => {
@@ -418,21 +493,34 @@ describe('Tests for everything but the happy path', () => {
     const { syncCmd, mockedSimpleGitInstance } = getSyncCmd();
 
     // Act
-    const cmdOutput = await syncCmd([], [])();
+    const cmdOutputTE = syncCmd([], []);
 
     // Assert
-    expect(cmdOutput).not.toBeInstanceOf(Function);
+    await pipe(
+      cmdOutputTE,
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail("Expected 'CmdResponse' object but got a CLI exit function")
+          ),
+
+        cmdOutput => async () => {
+          expect(cmdOutput).not.toBeInstanceOf(Function);
+
+          expect(cmdOutput).toMatchObject({
+            errors: [SYNC_CMD_STATES.GIT_IS_NOT_INSTALLED],
+            warnings: [],
+            testOutput: '',
+            output: [],
+          });
+        }
+      )
+    )();
+
     expect(mockedSimpleGitInstance).not.toBeInstanceOf(Error);
 
     expect((mockedSimpleGitInstance as SimpleGit).push).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).commit).not.toHaveBeenCalled();
     expect((mockedSimpleGitInstance as SimpleGit).add).not.toHaveBeenCalled();
-
-    expect(cmdOutput as CmdDataOutput).toMatchObject<CmdDataOutput>({
-      errors: [SYNC_CMD_STATES.GIT_IS_NOT_INSTALLED],
-      warnings: [],
-      testOutput: '',
-      output: [],
-    });
   });
 });

@@ -6,8 +6,8 @@ import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
 
-import { pipe } from 'fp-ts/lib/function';
 import { match, P } from 'ts-pattern';
+import { flow, pipe } from 'fp-ts/lib/function';
 import { ExitCodes } from '../constants';
 import { newAggregateError } from '@utils/AggregateError';
 import { optionConfigConstructor } from '@lib/arg-parser';
@@ -32,14 +32,15 @@ import {
 } from '@app/helpers';
 import {
   File,
-  CurriedReturnType,
   SourcePath,
   CmdOptions,
-  CmdResponse,
   ConfigGroup,
   PositionalArgs,
   DestinationPath,
+  CurriedReturnType,
+  CmdFnWithTestOutput,
   LinkCmdOperationType,
+  CmdResponseWithTestOutput,
 } from '@types';
 
 interface ParsedCmdOptions {
@@ -57,7 +58,7 @@ interface LinkCmdParameter {
 export default function main(
   cmdArguments: PositionalArgs | [],
   cmdOptions: CmdOptions | []
-) {
+): ReturnType<CmdFnWithTestOutput<ConfigGroup[]>> {
   return pipe(
     TE.Do,
     TE.let('parsedLinkCmdOptions', () => parseCmdOptions(cmdOptions)),
@@ -68,17 +69,8 @@ export default function main(
         : TE.right(cmdArguments)
     ),
 
-    TE.foldW(
-      issue => async () =>
-        match(issue)
-          .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
-          .with(P.instanceOf(Error), (_, err) =>
-            exitCli(err.message, ExitCodes.GENERAL)
-          )
-          .exhaustive(),
-
-      linkCmdParameter => linkCmd(linkCmdParameter)
-    )
+    TE.mapLeft(aggregateCmdErrors),
+    TE.chainW(flow(linkCmd, TE.rightTask))
   );
 }
 
@@ -112,6 +104,13 @@ function generateOptionConfig() {
       }),
     },
   };
+}
+
+function aggregateCmdErrors(errors: ExitCodes.OK | Error) {
+  return match(errors)
+    .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
+    .with(P.instanceOf(Error), (_, err) => exitCli(err.message, ExitCodes.GENERAL))
+    .exhaustive();
 }
 
 interface LinkOperationResponse {
@@ -153,7 +152,7 @@ function linkCmd({
 
 function generateCmdResponse(
   linkOperationResponse: LinkOperationResponse
-): CmdResponse<ConfigGroup[]> {
+): CmdResponseWithTestOutput<ConfigGroup[]> {
   const { configGroupCreationResults, linkOperationResults } = linkOperationResponse;
 
   const { left: configGroupCreationErrs, right: configGroups } =

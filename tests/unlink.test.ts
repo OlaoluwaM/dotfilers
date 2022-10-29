@@ -3,14 +3,15 @@
 import * as A from 'fp-ts/lib/Array';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
+import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
 import prompts from 'prompts';
 
 import { compose } from 'ramda';
 import { flow, pipe } from 'fp-ts/lib/function';
-import { default as linkCmd } from '@cmds/link';
-import { default as unlinkCmd } from '@cmds/unlink';
+import { default as _linkCmd } from '@cmds/link';
+import { default as _unlinkCmd } from '@cmds/unlink';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { createDirIfItDoesNotExist } from '@utils/index';
 import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
@@ -31,13 +32,17 @@ import {
   getAllDestinationPathsFromConfigGroups,
 } from './helpers';
 import {
-  CmdResponse,
+  CmdResponseWithTestOutput,
   toCmdOptions,
   PositionalArgs,
   DestinationPath,
   toPositionalArgs,
   CurriedReturnType,
 } from '@types';
+
+// TODO: Implement tests using TaskEither Interface instead
+const linkCmd = flow(_linkCmd, TE.toUnion);
+const unlinkCmd = flow(_unlinkCmd, TE.toUnion);
 
 type CmdOutput = Awaited<CurriedReturnType<typeof unlinkCmd>>;
 
@@ -248,7 +253,7 @@ describe('Tests for the happy path', () => {
     const cmdOutput = await unlinkCmd(configGroupNames, [])();
 
     const { errors, testOutput: operatedOnDestinationPaths } =
-      cmdOutput as CmdResponse<DestinationPath[]>;
+      cmdOutput as CmdResponseWithTestOutput<DestinationPath[]>;
 
     const nestedConfigGroupDestinationPaths =
       getAllDestinationPathsFromConfigGroups(configGroups);
@@ -390,7 +395,7 @@ describe('Tests for everything but the happy path', () => {
     // Act
     const cmdOutput = await unlinkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [])();
 
-    const { errors, output: cmdResponse } = cmdOutput as CmdResponse<
+    const { errors, output: cmdResponse } = cmdOutput as CmdResponseWithTestOutput<
       DestinationPath[]
     >;
 

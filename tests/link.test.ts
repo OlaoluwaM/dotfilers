@@ -10,11 +10,11 @@ import path from 'path';
 import prompts from 'prompts';
 import micromatch from 'micromatch';
 
-import { pipe } from 'fp-ts/lib/function';
 import { compose } from 'ramda';
+import { flow, pipe } from 'fp-ts/lib/function';
 import { MonoidAll } from 'fp-ts/lib/boolean';
 import { concatAll } from 'fp-ts/lib/Monoid';
-import { default as linkCmd } from '@cmds/link';
+import { default as _linkCmd } from '@cmds/link';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { createDirIfItDoesNotExist } from '@utils/index';
 import { getAllConfigGroupDirPaths } from '@app/helpers';
@@ -55,6 +55,9 @@ import {
   getNonIgnoredFilesFromConfigGroups,
   getAllDestinationPathsFromConfigGroups,
 } from './helpers';
+
+// TODO: Implement tests using TaskEither Interface instead
+const linkCmd = flow(_linkCmd, TE.toUnion)
 
 type CmdOutput = Awaited<CurriedReturnType<typeof linkCmd>>;
 

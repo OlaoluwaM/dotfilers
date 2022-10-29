@@ -14,10 +14,11 @@ import {
   File,
   CmdOptions,
   ConfigGroup,
-  CmdResponse,
   PositionalArgs,
   DestinationPath,
   CurriedReturnType,
+  CmdResponseWithTestOutput,
+  CmdFnWithTestOutput,
 } from '@types';
 import {
   isNotIgnored,
@@ -38,7 +39,7 @@ interface ParsedCmdOptions {
 export default function main(
   cmdArguments: PositionalArgs | [],
   cmdOptions: CmdOptions | []
-) {
+): ReturnType<CmdFnWithTestOutput<DestinationPath[]>> {
   return pipe(
     TE.of(cmdOptions),
     TE.map(parseUnlinkCmdOptions),
@@ -49,17 +50,8 @@ export default function main(
         : TE.right(cmdArguments)
     ),
 
-    TE.foldW(
-      issue => async () =>
-        match(issue)
-          .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
-          .with(P.instanceOf(Error), (_, err) =>
-            exitCli(err.message, ExitCodes.GENERAL)
-          )
-          .exhaustive(),
-
-      configGroupNames => unlinkCmd(configGroupNames)
-    )
+    TE.mapLeft(aggregateCmdErrors),
+    TE.chainW(flow(unlinkCmd, TE.rightTask))
   );
 }
 
@@ -81,6 +73,13 @@ function generateOptionConfig() {
       }),
     },
   };
+}
+
+function aggregateCmdErrors(errors: ExitCodes.OK | Error) {
+  return match(errors)
+    .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
+    .with(P.instanceOf(Error), (_, err) => exitCli(err.message, ExitCodes.GENERAL))
+    .exhaustive();
 }
 
 interface UnlinkOperationResponse {
@@ -122,7 +121,7 @@ function unlinkCmd(configGroupNamesOrDirPaths: string[]) {
 
 function generateCmdResponse(
   unlinkOperationResponse: UnlinkOperationResponse
-): CmdResponse<DestinationPath[]> {
+): CmdResponseWithTestOutput<DestinationPath[]> {
   const {
     configGroupCreationResults,
     validDestinationPaths: validConfigGroupDestinationPaths,

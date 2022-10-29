@@ -6,12 +6,12 @@ import * as RT from 'fp-ts/lib/ReaderTask';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import { ExitCodes } from '../constants';
+import { flow, pipe } from 'fp-ts/lib/function';
 import { NonEmptyArray } from 'fp-ts/lib/NonEmptyArray';
-import { flow, identity, pipe } from 'fp-ts/lib/function';
-import { CmdOptions, CmdResponse } from '@types';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import { doesPathExistSync, execShellCmd } from '../utils/index';
 import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
+import { CmdFnWithTestOutput, CmdOptions, CmdResponseWithTestOutput } from '@types';
 import {
   exitCli,
   getParsedOptions,
@@ -30,18 +30,17 @@ export interface GitInstance {
 }
 
 // EXPORTED FOR TESTING PURPOSES ONLY
-// Ideally, we should have the gitInstance come as the last parameter, but it's more general than the cmdOptions parameter
 export function _main(gitInstance: E.Either<Error, GitInstance>) {
-  return (_: [], cmdOptions: CmdOptions | []) =>
+  return (
+    _: [],
+    cmdOptions: CmdOptions | []
+  ): ReturnType<CmdFnWithTestOutput<string>> =>
     pipe(
       gitInstance,
       TE.fromEither,
-      TE.foldW(
-        errorObj => async () => exitCli(errorObj.message, ExitCodes.GENERAL),
-        ({ git, dotfilesDirPath }) =>
-          // The reason we are invoking this here is because we do not want to have to differentiate between an asynchronous function (Task)
-          // and a synchronous function (IO) later in the pipeline
-          syncCmd(git)(dotfilesDirPath)(cmdOptions)
+      TE.mapLeft(errorObj => exitCli(errorObj.message, ExitCodes.GENERAL)),
+      TE.chainW(({ git, dotfilesDirPath }) =>
+        pipe(syncCmd(git)(dotfilesDirPath)(cmdOptions), TE.rightTask)
       )
     );
 }
@@ -110,6 +109,7 @@ function syncCmd(git: SimpleGit) {
       TE.fold(
         syncErrorStateMsg => async () =>
           constructSyncCmdErrorResponse(syncErrorStateMsg),
+
         handleSyncSuccessOutput(git)(dotfilesDirPath)(cmdOptions)
       )
     )();
@@ -181,7 +181,7 @@ function repoHasACleanWorkingTree(dirPath: string) {
 
 function constructSyncCmdErrorResponse(
   syncCmdStateVal: string
-): CmdResponse<string> {
+): CmdResponseWithTestOutput<string> {
   return {
     warnings: [],
     errors: [syncCmdStateVal],
@@ -190,7 +190,9 @@ function constructSyncCmdErrorResponse(
   };
 }
 
-function constructSyncCmdCmdOutput(syncCmdStateVal: string): CmdResponse<string> {
+function constructSyncCmdCmdOutput(
+  syncCmdStateVal: string
+): CmdResponseWithTestOutput<string> {
   return {
     warnings: [],
     errors: [],
@@ -240,7 +242,5 @@ export function generateDefaultCommitMessage() {
   return 'chore: dotfiles update!';
 }
 
-const main =
-  process.env.NODE_ENV === 'test' ? identity : _main(generateGitInstance());
-
+const main = () => _main(generateGitInstance());
 export default main;
