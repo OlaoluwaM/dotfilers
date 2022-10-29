@@ -10,15 +10,27 @@ import path from 'path';
 import prompts from 'prompts';
 
 import { not } from 'fp-ts/lib/Predicate';
+import { omit } from 'ramda';
 import { flow, pipe } from 'fp-ts/lib/function';
 import { fs as fsExtra, chalk } from 'zx';
 import { default as readdirp, ReaddirpOptions } from 'readdirp';
-import { RawFile, PartialFile, toSourcePath, LinkCmdOperationType } from '@types';
+import {
+  ParserConfig,
+  AnyParserOutput,
+  default as parseArgv,
+} from '@lib/arg-parser/';
+import {
+  RawFile,
+  PartialFile,
+  CmdResponse,
+  toSourcePath,
+  LinkCmdOperationType,
+  CmdResponseWithTestOutput,
+} from '@types';
 import {
   isValidShellExpansion,
   expandShellVariablesInString,
 } from '@lib/shellVarStrExpander';
-import parseArgv, { AnyParserOutput, ParserConfig } from '@lib/arg-parser/';
 import {
   ExitCodes,
   SHELL_VARS_TO_CONFIG_GRP_DIRS,
@@ -168,4 +180,10 @@ function getOptionsFromParserOutput<PO extends AnyParserOutput>(parserOutput: PO
 export function getParsedOptions<PC extends ParserConfig>(parserConfig: PC) {
   return (cmdOptions: string[]) =>
     pipe(parseArgv(parserConfig)(cmdOptions), getOptionsFromParserOutput);
+}
+
+export function removeTestOutputFromCommandResponse<T>(
+  cmdResponse: CmdResponseWithTestOutput<T>
+): CmdResponse {
+  return omit(['testOutput'], cmdResponse);
 }

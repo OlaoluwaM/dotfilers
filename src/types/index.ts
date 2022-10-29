@@ -84,15 +84,17 @@ export interface CmdResponseWithTestOutput<T> {
 
 export type CmdResponse = Omit<CmdResponseWithTestOutput<unknown>, 'testOutput'>;
 
+// Intersections are due to function arguments being contra-variant
 export interface CmdFnWithTestOutput<T> {
-  (cmdArguments: PositionalArgs, cmdOptions: CmdOptions): TE.TaskEither<
+  (cmdArguments: PositionalArgs & [], cmdOptions: CmdOptions & []): TE.TaskEither<
     IO.IO<never>,
     CmdResponseWithTestOutput<T>
   >;
 }
 
+// Intersections are due to function arguments being contra-variant
 export interface CmdFn {
-  (cmdArguments: PositionalArgs, cmdOptions: CmdOptions): TE.TaskEither<
+  (cmdArguments: PositionalArgs & [], cmdOptions: CmdOptions & []): TE.TaskEither<
     IO.IO<never>,
     CmdResponse
   >;
