@@ -10,7 +10,7 @@ import path from 'path';
 import { match, P } from 'ts-pattern';
 import { flow, pipe } from 'fp-ts/lib/function';
 import { newAggregateError } from '@utils/AggregateError';
-import { ExitCodes, spinner } from '../constants.js';
+import { ExitCodes, spinner } from '../constants';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import {
   isNotIgnored,
@@ -19,6 +19,7 @@ import {
 } from '@app/configGroup';
 import {
   bind,
+  arrayToList,
   normalizedCopy,
   deleteThenSymlink,
   deleteThenHardlink,
@@ -126,7 +127,11 @@ function initiateSpinner(configGroupNamesOrDirPaths: string[]) {
   const configGroupsNames = pipe(configGroupNamesOrDirPaths, A.map(path.basename));
 
   return () =>
-    spinner.start(`Linking files from the following config groups: ${configGroupsNames}...`);
+    spinner.start(
+      `Linking files from the following config groups: ${arrayToList(
+        configGroupsNames
+      )}...`
+    );
 }
 
 interface LinkOperationResponse {

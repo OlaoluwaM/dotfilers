@@ -239,3 +239,12 @@ export function reArrangeCmdResponseTypeOrder(
     output,
   };
 }
+
+export function arrayToList(arr: string[]): string {
+  const arrCopy = [...arr];
+
+  const indexOfLastElement = arrCopy.length - 1;
+  arrCopy[indexOfLastElement] = `and ${arrCopy[indexOfLastElement]}`;
+
+  return pipe(arrCopy, A.intercalate(S.Monoid)(', '));
+}

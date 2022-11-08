@@ -22,7 +22,7 @@ import {
   ExitCodes,
   SHELL_EXEC_MOCK_VAR_NAME,
   SHELL_EXEC_MOCK_ERROR_HOOK,
-} from '../src/constants.js';
+} from '../src/constants';
 import {
   _main,
   GitInstance,

@@ -28,7 +28,7 @@ import {
   ExitCodes,
   SHELL_VARS_TO_CONFIG_GRP_DIRS,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
-} from '../constants.js';
+} from '../constants';
 import {
   RawFile,
   CmdOptions,

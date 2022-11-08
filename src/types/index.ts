@@ -3,7 +3,7 @@ import * as TE from 'fp-ts/lib/TaskEither';
 
 import { EntryInfo } from 'readdirp';
 import { AggregateError } from '@utils/AggregateError';
-import { NOT_FOUND, ALL_FILES_CHAR, EXCLUDE_KEY } from '../constants.js';
+import { NOT_FOUND, ALL_FILES_CHAR, EXCLUDE_KEY } from '../constants';
 import { Brand, createBrander, ExcludeNonBrands } from '@lib/brand';
 
 export type RawFile = EntryInfo;

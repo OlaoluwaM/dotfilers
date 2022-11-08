@@ -19,7 +19,7 @@ import {
   ExitCodes,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
   SHELL_VARS_TO_CONFIG_GRP_DIRS_STR,
-} from '../src/constants.js';
+} from '../src/constants';
 
 const CMD_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/create-config-grp`;
 

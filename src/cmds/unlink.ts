@@ -10,9 +10,9 @@ import path from 'path';
 
 import { match, P } from 'ts-pattern';
 import { pipe, flow } from 'fp-ts/lib/function';
-import { ExitCodes, spinner } from '../constants.js';
-import { bind, removeEntityAt } from '../utils/index';
+import { ExitCodes, spinner } from '../constants';
 import { optionConfigConstructor } from '@lib/arg-parser';
+import { arrayToList, bind, removeEntityAt } from '@utils/index';
 import {
   isNotIgnored,
   getFilesFromConfigGroup,
@@ -98,7 +98,9 @@ function initiateSpinner(configGroupNamesOrDirPaths: string[]) {
 
   return () =>
     spinner.start(
-      `Unlinking files from the following config groups: ${configGroupsNames}...`
+      `Unlinking files from the following config groups: ${arrayToList(
+        configGroupsNames
+      )}...`
     );
 }
 

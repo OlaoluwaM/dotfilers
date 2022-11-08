@@ -5,7 +5,7 @@ import path from 'path';
 import fsExtra from 'fs-extra';
 
 import { pipe } from 'fp-ts/lib/function';
-import { __dirname } from '../constants.js';
+import { __dirname } from '../constants';
 import { PositionalArgs, CmdOptions, CmdFnWithTestOutput } from '@types';
 
 export default function main(

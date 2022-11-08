@@ -9,7 +9,7 @@ import * as TE from 'fp-ts/lib/TaskEither';
 import { flow, pipe } from 'fp-ts/lib/function';
 import { NonEmptyArray } from 'fp-ts/lib/NonEmptyArray';
 import { newAggregateError } from '@utils/AggregateError';
-import { ExitCodes, spinner } from '../constants.js';
+import { ExitCodes, spinner } from '../constants';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import { doesPathExistSync, execShellCmd } from '../utils/index';
 import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';

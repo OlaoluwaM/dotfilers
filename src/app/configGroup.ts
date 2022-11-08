@@ -32,7 +32,7 @@ import {
   ALL_FILES_CHAR,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
   SHELL_VARS_TO_CONFIG_GRP_DIRS_STR,
-} from '../constants.js';
+} from '../constants';
 import {
   File,
   AnyObject,

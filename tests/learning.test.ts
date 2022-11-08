@@ -10,7 +10,7 @@ import { globby } from 'globby';
 import { execShellCmd } from '@utils/index';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { describe, test, expect } from '@jest/globals';
-import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants.js';
+import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants';
 import { default as readdirp, ReaddirpOptions } from 'readdirp';
 import { getRelativePathWithoutLeadingPathSeparator } from './helpers';
 

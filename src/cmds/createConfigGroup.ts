@@ -12,7 +12,7 @@ import { match, P } from 'ts-pattern';
 import { writeFile } from 'fs/promises';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { newAggregateError } from '@utils/AggregateError';
-import { CONFIG_GRP_DEST_RECORD_FILE_NAME, ExitCodes } from '../constants.js';
+import { CONFIG_GRP_DEST_RECORD_FILE_NAME, ExitCodes } from '../constants';
 import { bind, createDirIfItDoesNotExist, doesPathExist } from '@utils/index';
 import {
   DEFAULT_DEST_RECORD_FILE_CONTENTS,

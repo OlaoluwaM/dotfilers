@@ -20,7 +20,7 @@ import {
   ExitCodes,
   ALL_FILES_CHAR,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
-} from '../src/constants.js';
+} from '../src/constants';
 import {
   toCmdOptions,
   DestinationPath,

@@ -27,10 +27,10 @@ export function getAbsolutePathsForFile(fileUrl: string) {
   }));
 }
 
-export const __dirname = pipe(process.argv[1], dirname, dirname);
+export const { __dirname } = getAbsolutePathsForFile(import.meta.url);
 
 const spinnerOptions: Options = {
-  spinner: 'bouncingBall',
+  spinner: 'dots',
 };
 
 export const spinner = ora(spinnerOptions);
