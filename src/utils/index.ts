@@ -6,7 +6,8 @@ import * as T from 'fp-ts/lib/Task';
 import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
-import boxen from 'boxen';
+import chalk from 'chalk';
+import fsExtra from 'fs-extra';
 
 import { pipe } from 'fp-ts/lib/function';
 import { exec } from 'child_process';
@@ -14,15 +15,22 @@ import { getEnv } from '@lib/shellVarStrExpander';
 import { match, P } from 'ts-pattern';
 import { promisify } from 'util';
 import { isEmpty, slice } from 'ramda';
-import { chalk, fs as fsExtra } from 'zx';
-import { AnyFunction, DestinationPath, SourcePath } from '@types';
 import { copyFile, link, symlink, unlink } from 'fs/promises';
-import { SHELL_EXEC_MOCK_ERROR_HOOK, SHELL_EXEC_MOCK_VAR_NAME } from '../constants';
+import { SHELL_EXEC_MOCK_VAR_NAME, SHELL_EXEC_MOCK_ERROR_HOOK } from '../constants';
 import {
   AggregateError,
   newAggregateError,
   getErrorMessagesFromAggregateErr,
 } from './AggregateError';
+import {
+  CliInputs,
+  SourcePath,
+  AnyFunction,
+  toCliInputs,
+  CmdResponse,
+  DestinationPath,
+  ParsedCmdResponse,
+} from '@types';
 
 export function getCLIArguments(startingInd: number) {
   return slice(startingInd, Infinity)(process.argv);
@@ -89,29 +97,58 @@ export function removeEntityAt(
   );
 }
 
-export function logErrors(errors: AggregateError[]): IO.IO<void> {
-  const errorMsgs = pipe(errors, A.map(getErrorMessagesFromAggregateErr), A.flatten);
+function toErrorMsgs(aggregateErrors: AggregateError[]): string[] {
+  return pipe(aggregateErrors, A.map(getErrorMessagesFromAggregateErr), A.flatten);
+}
 
+export function parseCmdResponse(cmdResponseObj: CmdResponse): ParsedCmdResponse {
+  const { errors: aggregateErrors } = cmdResponseObj;
+
+  return {
+    ...cmdResponseObj,
+    errors: toErrorMsgs(aggregateErrors),
+  };
+}
+
+enum LogColor {
+  ERROR = 'red',
+  WARNING = 'yellow',
+  OUTPUT = 'white',
+}
+
+export function logErrors(errorMsgs: string[]): IO.IO<void> {
   return () => {
     if (A.isEmpty(errorMsgs)) return;
 
-    const errStr = pipe(
-      errorMsgs,
-      A.map(msg => chalk.red(msg)),
-      A.intercalate(S.Monoid)('\n\n')
+    const errStr = pipe(errorMsgs, A.map(chalk.red), A.intercalate(S.Monoid)('\n'));
+
+    const title = `${chalk[`${LogColor.ERROR}Bright`].underline.bold(
+      'Errors'
+    )}(${chalk[LogColor.ERROR].dim.underline(errorMsgs.length)})`;
+
+    console.warn('\n');
+    console.error(title);
+    console.error(errStr);
+  };
+}
+
+export function logWarnings(warnings: string[]): IO.IO<void> {
+  return () => {
+    if (A.isEmpty(warnings)) return;
+
+    const warningStr = pipe(
+      warnings,
+      A.map(chalk.yellow),
+      A.intercalate(S.Monoid)('\n')
     );
 
-    const title = `${chalk.redBright.bold('Errors')}(${chalk.red.dim(
-      errorMsgs.length
-    )})`;
+    const title = `${chalk[`${LogColor.WARNING}Bright`].underline.bold(
+      'Warnings'
+    )}(${chalk[LogColor.WARNING].dim.underline(warnings.length)})`;
 
-    console.error(
-      boxen(errStr, {
-        title,
-        padding: 1,
-        borderColor: 'red',
-      })
-    );
+    console.warn('\n');
+    console.warn(title);
+    console.warn(warningStr);
   };
 }
 
@@ -119,19 +156,15 @@ export function logOutput(outputMsgs: string[]): IO.IO<void> {
   return () => {
     if (A.isEmpty(outputMsgs)) return;
 
-    const outputStr = pipe(
-      outputMsgs,
-      A.map(msg => chalk.green(msg)),
-      A.intercalate(S.Monoid)('\n\n')
-    );
+    const outputStr = pipe(outputMsgs, A.intercalate(S.Monoid)('\n'));
 
-    console.log(
-      boxen(outputStr, {
-        title: chalk.greenBright.bold('Success'),
-        padding: 1,
-        borderColor: 'green',
-      })
-    );
+    const title = `${chalk[`${LogColor.OUTPUT}Bright`].underline.bold(
+      'Output'
+    )}(${chalk[LogColor.OUTPUT].dim.underline(outputMsgs.length)})`;
+
+    console.log('\n');
+    console.log(title);
+    console.log(outputStr);
   };
 }
 
@@ -185,4 +218,24 @@ export function bind<Fn extends AnyFunction>(fn: Fn) {
   return (...argsToBind: Parameters<Fn>) =>
     () =>
       fn(...argsToBind) as ReturnType<Fn>;
+}
+
+export function getCliInputsArrFromArgv(argv: string[]): CliInputs {
+  const INDEX_OF_CLI_ARGS = 2;
+  return pipe(argv, slice(INDEX_OF_CLI_ARGS, Infinity)<string>, toCliInputs);
+}
+
+export function emptyLog(_?: unknown): IO.IO<void> {
+  return () => console.log();
+}
+
+export function reArrangeCmdResponseTypeOrder(
+  cmdResponse: ParsedCmdResponse
+): ParsedCmdResponse {
+  const { errors, output, warnings } = cmdResponse;
+  return {
+    errors,
+    warnings,
+    output,
+  };
 }

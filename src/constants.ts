@@ -26,7 +26,13 @@ export function getAbsolutePathsForFile(fileUrl: string) {
   }));
 }
 
-export const { __dirname } = getAbsolutePathsForFile(import.meta.url);
+export const __dirname = pipe(process.argv[1], dirname, dirname);
+
+export enum LogPrefixes {
+  ERROR = '❌',
+  WARNING = '⚠️',
+  OUTPUT = '✔️',
+}
 
 export enum ExitCodes {
   OK = 0,

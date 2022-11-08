@@ -1,4 +1,4 @@
-import * as L from 'monocle-ts/Lens';
+import * as L from 'monocle-ts/lib/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as IO from 'fp-ts/lib/IO';
@@ -7,35 +7,37 @@ import * as TE from 'fp-ts/lib/TaskEither';
 import * as RNEA from 'fp-ts/lib/ReadonlyNonEmptyArray';
 
 import path from 'path';
+import chalk from 'chalk';
+import fsExtra from 'fs-extra';
 import prompts from 'prompts';
 
 import { not } from 'fp-ts/lib/Predicate';
 import { omit } from 'ramda';
 import { flow, pipe } from 'fp-ts/lib/function';
-import { fs as fsExtra, chalk } from 'zx';
 import { default as readdirp, ReaddirpOptions } from 'readdirp';
+import {
+  isValidShellExpansion,
+  expandShellVariablesInString,
+} from '@lib/shellVarStrExpander';
 import {
   ParserConfig,
   AnyParserOutput,
   default as parseArgv,
 } from '@lib/arg-parser/';
 import {
+  ExitCodes,
+  SHELL_VARS_TO_CONFIG_GRP_DIRS,
+  CONFIG_GRP_DEST_RECORD_FILE_NAME,
+} from '../constants.js';
+import {
   RawFile,
-  PartialFile,
+  CmdOptions,
   CmdResponse,
+  PartialFile,
   toSourcePath,
   LinkCmdOperationType,
   CmdResponseWithTestOutput,
 } from '@types';
-import {
-  isValidShellExpansion,
-  expandShellVariablesInString,
-} from '@lib/shellVarStrExpander';
-import {
-  ExitCodes,
-  SHELL_VARS_TO_CONFIG_GRP_DIRS,
-  CONFIG_GRP_DEST_RECORD_FILE_NAME,
-} from '../constants';
 
 export function getAllOperableFilesFromConfigGroupDir(
   rootPath: string
@@ -170,20 +172,22 @@ export function getPathToDotfilesDirPathRetrievalError() {
 }
 
 export function parseCmdOptions<PC extends ParserConfig>(parserConfig: PC) {
-  return (cmdOptions: string[]) => pipe(cmdOptions, parseArgv(parserConfig));
+  return (cmdOptions: CmdOptions) => pipe(cmdOptions, parseArgv(parserConfig));
 }
 
-function getOptionsFromParserOutput<PO extends AnyParserOutput>(parserOutput: PO) {
+export function getOptionsFromParserOutput<PO extends AnyParserOutput>(
+  parserOutput: PO
+) {
   return pipe(L.id<PO>(), L.prop('options')).get(parserOutput);
 }
 
 export function getParsedOptions<PC extends ParserConfig>(parserConfig: PC) {
-  return (cmdOptions: string[]) =>
+  return (cmdOptions: CmdOptions) =>
     pipe(parseArgv(parserConfig)(cmdOptions), getOptionsFromParserOutput);
 }
 
 export function removeTestOutputFromCommandResponse<T>(
   cmdResponse: CmdResponseWithTestOutput<T>
-): CmdResponse {
-  return omit(['testOutput'], cmdResponse);
+) {
+  return omit(['testOutput'], cmdResponse) as CmdResponse;
 }

@@ -1,7 +1,7 @@
 /* globals expect, describe, test */
 import * as A from 'fp-ts/lib/Array';
 import * as E from 'fp-ts/lib/Either';
-import * as L from 'monocle-ts/Lens';
+import * as L from 'monocle-ts/lib/Lens';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
 import * as RA from 'fp-ts/lib/ReadonlyArray';
@@ -22,7 +22,7 @@ import {
   ExitCodes,
   SHELL_EXEC_MOCK_VAR_NAME,
   SHELL_EXEC_MOCK_ERROR_HOOK,
-} from '../src/constants';
+} from '../src/constants.js';
 import {
   _main,
   GitInstance,
@@ -30,6 +30,7 @@ import {
   generateGitInstance,
   generateDefaultCommitMessage,
 } from '../src/cmds/sync';
+import { newAggregateError } from '@utils/AggregateError';
 
 interface SyncCmd {
   syncCmd: ReturnType<typeof _main>;
@@ -469,7 +470,9 @@ describe('Tests for everything but the happy path', () => {
           expect(cmdOutput).not.toBeInstanceOf(Function);
 
           expect(cmdOutput).toMatchObject({
-            errors: [SYNC_CMD_STATES.DOTFILES_DIR_IS_NOT_GIT_REPO],
+            errors: [
+              newAggregateError(SYNC_CMD_STATES.DOTFILES_DIR_IS_NOT_GIT_REPO),
+            ],
             warnings: [],
             testOutput: '',
             output: [],
@@ -508,7 +511,7 @@ describe('Tests for everything but the happy path', () => {
           expect(cmdOutput).not.toBeInstanceOf(Function);
 
           expect(cmdOutput).toMatchObject({
-            errors: [SYNC_CMD_STATES.GIT_IS_NOT_INSTALLED],
+            errors: [newAggregateError(SYNC_CMD_STATES.GIT_IS_NOT_INSTALLED)],
             warnings: [],
             testOutput: '',
             output: [],

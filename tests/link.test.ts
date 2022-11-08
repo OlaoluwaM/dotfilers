@@ -23,7 +23,6 @@ import {
   File,
   SourcePath,
   toCmdOptions,
-  PositionalArgs,
   DestinationPath,
   toPositionalArgs,
   CurriedReturnType,
@@ -34,7 +33,7 @@ import {
   ALL_FILES_CHAR,
   SHELL_VARS_TO_CONFIG_GRP_DIRS,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
-} from '../src/constants';
+} from '../src/constants.js';
 import {
   isSymlink,
   ExcludeFn,
@@ -57,7 +56,7 @@ import {
 } from './helpers';
 
 // TODO: Implement tests using TaskEither Interface instead
-const linkCmd = flow(_linkCmd, TE.toUnion)
+const linkCmd = flow(_linkCmd, TE.toUnion);
 
 type CmdOutput = Awaited<CurriedReturnType<typeof linkCmd>>;
 
@@ -87,12 +86,10 @@ function getSourceAndDestinationPathsFromFileObj(configGroupFileObj: File) {
   ] as [SourcePath, DestinationPath];
 }
 
-const VALID_MOCK_CONFIG_GRP_NAMES = [
-  'npm',
-  'bat',
-  'neovim',
-  'git',
-] as PositionalArgs;
+const VALID_MOCK_CONFIG_GRP_NAMES = pipe(
+  ['npm', 'bat', 'neovim', 'git'],
+  toPositionalArgs
+);
 
 describe('Tests for the happy path', () => {
   test(`Should ensure that link command correctly creates symlinks of files at their intended destinations when both ${SHELL_VARS_TO_CONFIG_GRP_DIRS[0]} and ${SHELL_VARS_TO_CONFIG_GRP_DIRS[1]} variables are set`, async () => {
@@ -1162,12 +1159,10 @@ describe('Tests for the happy path', () => {
 });
 
 describe('Tests for everything but the happy path', () => {
-  const INVALID_MOCK_CONFIG_GRP_NAMES = [
-    'node',
-    'spicetify',
-    'notion',
-    'cava',
-  ] as PositionalArgs;
+  const INVALID_MOCK_CONFIG_GRP_NAMES = pipe(
+    ['node', 'spicetify', 'notion', 'cava'],
+    toPositionalArgs
+  );
 
   test('Should check that the link command performs no operation if the specified config groups do not exist', async () => {
     // Arrange

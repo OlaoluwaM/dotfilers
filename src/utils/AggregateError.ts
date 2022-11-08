@@ -1,4 +1,4 @@
-import * as L from 'monocle-ts/Lens';
+import * as L from 'monocle-ts/lib/Lens';
 
 import { not } from 'fp-ts/lib/Predicate';
 import { pipe } from 'fp-ts/lib/function';

@@ -2,16 +2,16 @@ import * as A from 'fp-ts/lib/Array';
 import * as R from 'fp-ts/lib/Record';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
-import * as L from 'monocle-ts/Lens';
+import * as L from 'monocle-ts/lib/Lens';
 import * as Eq from 'fp-ts/lib/Eq';
-import * as MT from 'monocle-ts/Traversal';
+import * as MT from 'monocle-ts/lib/Traversal';
 
 import path from 'path';
+import fsExtra from 'fs-extra';
 
 import { values } from 'ramda';
 import { MonoidAll } from 'fp-ts/lib/boolean';
 import { concatAll } from 'fp-ts/lib/Monoid';
-import { fs as fsExtra } from 'zx';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { lstat, stat, writeFile } from 'fs/promises';
 import { AnyFunction, ConfigGroup, DestinationPath, File, SourcePath } from '@types';

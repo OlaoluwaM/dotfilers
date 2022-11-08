@@ -1,23 +1,29 @@
-import * as E from 'fp-ts/Either';
+import * as E from 'fp-ts/lib/Either';
 import * as O from 'fp-ts/lib/Option';
-import * as L from 'monocle-ts/Lens';
+import * as L from 'monocle-ts/lib/Lens';
 import * as RC from 'fp-ts/lib/Record';
 import * as RT from 'fp-ts/lib/ReaderTask';
 import * as TE from 'fp-ts/lib/TaskEither';
 
-import { ExitCodes } from '../constants';
+import { ExitCodes } from '../constants.js';
 import { flow, pipe } from 'fp-ts/lib/function';
 import { NonEmptyArray } from 'fp-ts/lib/NonEmptyArray';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import { doesPathExistSync, execShellCmd } from '../utils/index';
 import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
-import { CmdFnWithTestOutput, CmdOptions, CmdResponseWithTestOutput } from '@types';
+import {
+  CmdOptions,
+  PositionalArgs,
+  CmdFnWithTestOutput,
+  CmdResponseWithTestOutput,
+} from '@types';
 import {
   exitCli,
   getParsedOptions,
   getPathToDotfilesDirPath,
   getPathToDotfilesDirPathRetrievalError,
 } from '@app/helpers';
+import { newAggregateError } from '@utils/AggregateError';
 
 interface ParsedCmdOptions {
   readonly message: string;
@@ -32,8 +38,8 @@ export interface GitInstance {
 // EXPORTED FOR TESTING PURPOSES ONLY
 export function _main(gitInstance: E.Either<Error, GitInstance>) {
   return (
-    _: [],
-    cmdOptions: CmdOptions | []
+    _: PositionalArgs,
+    cmdOptions: CmdOptions
   ): ReturnType<CmdFnWithTestOutput<string>> =>
     pipe(
       gitInstance,
@@ -101,7 +107,7 @@ export enum SYNC_CMD_STATES {
 }
 
 function syncCmd(git: SimpleGit) {
-  return (dotfilesDirPath: string) => (cmdOptions: string[]) =>
+  return (dotfilesDirPath: string) => (cmdOptions: CmdOptions) =>
     flow(
       isGitInstalled,
       TE.chain(() => isGitRepo(dotfilesDirPath)),
@@ -117,7 +123,7 @@ function syncCmd(git: SimpleGit) {
 
 function handleSyncSuccessOutput(git: SimpleGit) {
   return (dotfilesDirPath: string) =>
-    (cmdOptions: string[]) =>
+    (cmdOptions: CmdOptions) =>
     (dotfilesRepoStatus: SYNC_CMD_STATES) =>
     async () => {
       switch (dotfilesRepoStatus) {
@@ -184,7 +190,7 @@ function constructSyncCmdErrorResponse(
 ): CmdResponseWithTestOutput<string> {
   return {
     warnings: [],
-    errors: [syncCmdStateVal],
+    errors: [newAggregateError(syncCmdStateVal)],
     output: [],
     testOutput: '',
   };
@@ -210,7 +216,7 @@ function performGitSyncOps(git: SimpleGit) {
     };
 }
 
-function generateGitCommitMessage(cmdOptions: string[]) {
+function generateGitCommitMessage(cmdOptions: CmdOptions) {
   const CommitMessageLens = pipe(L.id<ParsedCmdOptions>(), L.prop('message'));
 
   return pipe(

@@ -2,13 +2,15 @@ import * as A from 'fp-ts/lib/Array';
 import * as T from 'fp-ts/lib/Task';
 
 import path from 'path';
+import fsExtra from 'fs-extra';
 import micromatch from 'micromatch';
 
 import { pipe } from 'fp-ts/lib/function';
+import { globby } from 'globby';
+import { execShellCmd } from '@utils/index';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { describe, test, expect } from '@jest/globals';
-import { globby, $, fs as fsExtra } from 'zx';
-import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants';
+import { CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants.js';
 import { default as readdirp, ReaddirpOptions } from 'readdirp';
 import { getRelativePathWithoutLeadingPathSeparator } from './helpers';
 
@@ -29,8 +31,9 @@ describe('Learning tests to verify behavior of globby package', () => {
     const testDataDir = `${TEST_DATA_DIR_PREFIX}/learning/globby`;
 
     // Act
-    const { stdout: rawStrOfNonTsFiles } =
-      await $`ls -Rp ${testDataDir} | grep -v / | grep -Ev ".(ts|js)$" | grep -v "destinations.json" | sed -r '/^\s*$/d'`;
+    const { stdout: rawStrOfNonTsFiles } = await execShellCmd(
+      `ls -Rp ${testDataDir} | grep -v / | grep -Ev ".(ts|js)$" | grep -v "destinations.json" | sed -r '/^\s*$/d'`
+    );
 
     const numberOfNonTsFiles = rawStrOfNonTsFiles.split('\n');
 
@@ -89,7 +92,7 @@ describe.skip('Learning tests to verify behavior of the micromatch package', () 
     const gb = {
       '*.js': 'rrr',
       'f*': 'scv',
-      'd*': 'ddd'
+      'd*': 'ddd',
     } as Record<string, string>;
 
     const onMatch = ({ glob }: { glob: string }) => {
@@ -134,7 +137,7 @@ describe('Learning tests to verify usage of the readdirp package', () => {
     // Act
     const returnedFiles = await pipe(
       () => readdirp.promise(rootPath, config),
-      T.chainFirstIOK((o) => () => console.log(JSON.stringify(o, null, 2))),
+      T.chainFirstIOK(o => () => console.log(JSON.stringify(o, null, 2))),
       T.map(A.map(fileEntryInfo => fileEntryInfo.path))
     )();
 

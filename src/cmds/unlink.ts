@@ -1,12 +1,12 @@
 import * as A from 'fp-ts/lib/Array';
-import * as L from 'monocle-ts/Lens';
+import * as L from 'monocle-ts/lib/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as RC from 'fp-ts/lib/Record';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import { match, P } from 'ts-pattern';
-import { ExitCodes } from '../constants';
+import { ExitCodes } from '../constants.js';
 import { pipe, flow } from 'fp-ts/lib/function';
 import { bind, removeEntityAt } from '../utils/index';
 import { optionConfigConstructor } from '@lib/arg-parser';
@@ -37,8 +37,8 @@ interface ParsedCmdOptions {
 }
 
 export default function main(
-  cmdArguments: PositionalArgs | [],
-  cmdOptions: CmdOptions | []
+  cmdArguments: PositionalArgs,
+  cmdOptions: CmdOptions
 ): ReturnType<CmdFnWithTestOutput<DestinationPath[]>> {
   return pipe(
     TE.of(cmdOptions),
@@ -55,7 +55,7 @@ export default function main(
   );
 }
 
-function parseUnlinkCmdOptions(cmdOptions: string[]): ParsedCmdOptions {
+function parseUnlinkCmdOptions(cmdOptions: CmdOptions): ParsedCmdOptions {
   return pipe(
     cmdOptions,
     pipe(generateOptionConfig(), getParsedOptions),

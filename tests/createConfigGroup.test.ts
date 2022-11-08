@@ -6,10 +6,10 @@ import * as RA from 'fp-ts/lib/ReadonlyArray';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
+import fsExtra from 'fs-extra';
 
 import { rm } from 'fs/promises';
 import { pipe } from 'fp-ts/lib/function';
-import { fs as fsExtra } from 'zx';
 import { toPositionalArgs } from '@types';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { default as createConfigGroupCmd } from '@cmds/createConfigGroup';
@@ -19,7 +19,7 @@ import {
   ExitCodes,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
   SHELL_VARS_TO_CONFIG_GRP_DIRS_STR,
-} from '../src/constants';
+} from '../src/constants.js';
 
 const CMD_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/create-config-grp`;
 

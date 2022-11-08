@@ -11,16 +11,23 @@ import prompts from 'prompts';
 import { compose } from 'ramda';
 import { flow, pipe } from 'fp-ts/lib/function';
 import { default as _linkCmd } from '@cmds/link';
-import { default as _unlinkCmd } from '@cmds/unlink';
 import { TEST_DATA_DIR_PREFIX } from './setup';
+import { default as _unlinkCmd } from '@cmds/unlink';
 import { createDirIfItDoesNotExist } from '@utils/index';
 import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
 import { CmdDataOutput as LinkCmdDataOutput } from './link.test';
 import {
+  ExitCodes,
   ALL_FILES_CHAR,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
-  ExitCodes,
-} from '../src/constants';
+} from '../src/constants.js';
+import {
+  toCmdOptions,
+  DestinationPath,
+  toPositionalArgs,
+  CurriedReturnType,
+  CmdResponseWithTestOutput,
+} from '@types';
 import {
   ExcludeFn,
   ExtractFn,
@@ -31,14 +38,6 @@ import {
   getDestinationPathsOfIgnoredFiles,
   getAllDestinationPathsFromConfigGroups,
 } from './helpers';
-import {
-  CmdResponseWithTestOutput,
-  toCmdOptions,
-  PositionalArgs,
-  DestinationPath,
-  toPositionalArgs,
-  CurriedReturnType,
-} from '@types';
 
 // TODO: Implement tests using TaskEither Interface instead
 const linkCmd = flow(_linkCmd, TE.toUnion);
@@ -64,12 +63,10 @@ beforeAll(() => {
 const createConfigGroupFile = createFile(MOCK_DOTS_DIR);
 const generateConfigGroupStructurePath = generatePath(MOCK_DOTS_DIR);
 
-const VALID_MOCK_CONFIG_GRP_NAMES = [
-  'git',
-  'bat',
-  'neovim',
-  'npm',
-] as PositionalArgs;
+const VALID_MOCK_CONFIG_GRP_NAMES = pipe(
+  ['git', 'bat', 'neovim', 'npm'],
+  toPositionalArgs
+);
 
 describe('Tests for the happy path', () => {
   test.each([
@@ -150,10 +147,11 @@ describe('Tests for the happy path', () => {
     'Should ensure that the unlink command can delete %s config files from config groups even when some files are being ignored',
     async (_, mockLinkCmdCliOptions) => {
       // Arrange
-      const mockConfigGroupNames = VALID_MOCK_CONFIG_GRP_NAMES.concat([
-        'withAllIgnored',
-        'withSomeIgnored',
-      ]) as PositionalArgs;
+      const mockConfigGroupNames = pipe(
+        ['withAllIgnored', 'withSomeIgnored'],
+        A.concat(VALID_MOCK_CONFIG_GRP_NAMES),
+        toPositionalArgs
+      );
 
       const { testOutput: configGroups } = (await linkCmd(
         mockConfigGroupNames,
@@ -240,9 +238,10 @@ describe('Tests for the happy path', () => {
     await mockNestedConfigGroupDestinationRecordCreationTask();
     await mockTopLevelConfigGroupDestinationRecordCreationTask();
 
-    const configGroupNames = [
-      `${mockConfigGroupName}/${nestedConfigGroupName}`,
-    ] as PositionalArgs;
+    const configGroupNames = pipe(
+      [`${mockConfigGroupName}/${nestedConfigGroupName}`],
+      toPositionalArgs
+    );
 
     const { testOutput: configGroups } = (await linkCmd(
       configGroupNames,
@@ -361,12 +360,10 @@ describe('Tests for the happy path', () => {
 });
 
 describe('Tests for everything but the happy path', () => {
-  const INVALID_MOCK_CONFIG_GRP_NAMES = [
-    'fly-pie',
-    'mcfly',
-    'nvm',
-    'cava',
-  ] as PositionalArgs;
+  const INVALID_MOCK_CONFIG_GRP_NAMES = pipe(
+    ['fly-pie', 'mcfly', 'nvm', 'cava'],
+    toPositionalArgs
+  );
 
   test('Should ensure that the unlink command can handle cases where the specified config groups do not exist', async () => {
     // Arrange

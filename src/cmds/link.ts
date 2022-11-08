@@ -8,7 +8,7 @@ import path from 'path';
 
 import { match, P } from 'ts-pattern';
 import { flow, pipe } from 'fp-ts/lib/function';
-import { ExitCodes } from '../constants';
+import { ExitCodes } from '../constants.js';
 import { newAggregateError } from '@utils/AggregateError';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import {
@@ -56,8 +56,8 @@ interface LinkCmdParameter {
 }
 
 export default function main(
-  cmdArguments: PositionalArgs | [],
-  cmdOptions: CmdOptions | []
+  cmdArguments: PositionalArgs,
+  cmdOptions: CmdOptions
 ): ReturnType<CmdFnWithTestOutput<ConfigGroup[]>> {
   return pipe(
     TE.Do,
@@ -74,7 +74,7 @@ export default function main(
   );
 }
 
-function parseCmdOptions(cmdOptions: string[]): ParsedCmdOptions {
+function parseCmdOptions(cmdOptions: CmdOptions): ParsedCmdOptions {
   return pipe(
     cmdOptions,
     pipe(generateOptionConfig(), getParsedOptions),

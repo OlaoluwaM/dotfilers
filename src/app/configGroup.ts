@@ -1,7 +1,7 @@
 import * as d from 'io-ts/lib/Decoder';
 import * as A from 'fp-ts/lib/Array';
 import * as E from 'fp-ts/lib/Either';
-import * as L from 'monocle-ts/Lens';
+import * as L from 'monocle-ts/lib/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as R from 'fp-ts/lib/Record';
 import * as S from 'fp-ts/lib/string';
@@ -32,7 +32,7 @@ import {
   ALL_FILES_CHAR,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
   SHELL_VARS_TO_CONFIG_GRP_DIRS_STR,
-} from '../constants';
+} from '../constants.js';
 import {
   File,
   AnyObject,

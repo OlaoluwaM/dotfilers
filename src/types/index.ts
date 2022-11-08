@@ -3,8 +3,8 @@ import * as TE from 'fp-ts/lib/TaskEither';
 
 import { EntryInfo } from 'readdirp';
 import { AggregateError } from '@utils/AggregateError';
-import { Brand, createBrander } from '@lib/brand';
-import { NOT_FOUND, ALL_FILES_CHAR, EXCLUDE_KEY } from '../constants';
+import { NOT_FOUND, ALL_FILES_CHAR, EXCLUDE_KEY } from '../constants.js';
+import { Brand, createBrander, ExcludeNonBrands } from '@lib/brand';
 
 export type RawFile = EntryInfo;
 
@@ -76,17 +76,23 @@ export type CurriedReturnType<Fn> = Fn extends AnyFunction
   : Fn;
 
 export interface CmdResponseWithTestOutput<T> {
-  errors: AggregateError[] | string[];
+  errors: AggregateError[];
   warnings: string[];
   output: string[];
   testOutput: T; // NOTE: This property is for testing purposes only
 }
 
-export type CmdResponse = Omit<CmdResponseWithTestOutput<unknown>, 'testOutput'>;
+export type CmdResponse = Omit<CmdResponseWithTestOutput<unknown>, 'testOutput'> & {
+  testOutput: never;
+};
+
+export type ParsedCmdResponse = Omit<CmdResponse, 'errors' | 'testOutput'> & {
+  errors: string[];
+};
 
 // Intersections are due to function arguments being contra-variant
 export interface CmdFnWithTestOutput<T> {
-  (cmdArguments: PositionalArgs & [], cmdOptions: CmdOptions & []): TE.TaskEither<
+  (cmdArguments: PositionalArgs, cmdOptions: CmdOptions): TE.TaskEither<
     IO.IO<never>,
     CmdResponseWithTestOutput<T>
   >;
@@ -94,7 +100,7 @@ export interface CmdFnWithTestOutput<T> {
 
 // Intersections are due to function arguments being contra-variant
 export interface CmdFn {
-  (cmdArguments: PositionalArgs & [], cmdOptions: CmdOptions & []): TE.TaskEither<
+  (cmdArguments: PositionalArgs, cmdOptions: CmdOptions): TE.TaskEither<
     IO.IO<never>,
     CmdResponse
   >;
@@ -103,11 +109,15 @@ export interface CmdFn {
 export type SourcePath = Brand<string, 'Source Path'>;
 export type DestinationPath = Brand<string, 'Destination Path'>;
 
-export type CmdOptions = Brand<string[], 'Command Options'>;
-export type PositionalArgs = Brand<string[], 'Positional Args'>;
+export type CmdOptions = Brand<string[], 'Command Options'> | [];
+export type PositionalArgs = Brand<string[], 'Positional Args'> | [];
+
+export type CliInputs = Brand<string[], 'Parsed Argv'>;
 
 export const toSourcePath = createBrander<SourcePath>();
 export const toDestinationPath = createBrander<DestinationPath>();
 
-export const toCmdOptions = createBrander<CmdOptions>();
-export const toPositionalArgs = createBrander<PositionalArgs>();
+export const toCmdOptions = createBrander<ExcludeNonBrands<CmdOptions>>();
+export const toPositionalArgs = createBrander<ExcludeNonBrands<PositionalArgs>>();
+
+export const toCliInputs = createBrander<CliInputs>();

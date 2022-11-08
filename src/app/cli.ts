@@ -1,54 +1,87 @@
-import * as Rc from 'fp-ts/lib/Record';
+import * as A from 'fp-ts/lib/Array';
+import * as O from 'fp-ts/lib/Option';
+import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
-import linkCmd from '../cmds/link';
-import unlinkCmd from '../cmds/unlink';
-import createConfigGroupCmd from '../cmds/createConfigGroup';
+import linkCmd from '@cmds/link';
+import unlinkCmd from '@cmds/unlink';
+import createConfigGroupCmd from '@cmds/createConfigGroup';
 
-import { flow, pipe } from 'fp-ts/lib/function';
-import { default as _syncCmd } from '../cmds/sync';
-import { CmdFnWithTestOutput, CmdFn } from '../types/index';
-import { removeTestOutputFromCommandResponse } from './helpers';
+import { pipe } from 'fp-ts/lib/function';
+import { ExitCodes } from '../constants';
+import { exitCliWithCodeOnly } from './helpers';
+import { default as _syncCmd } from '@cmds/sync';
+import { logErrors, logOutput } from '@utils/index';
+import { default as helpCmd, getHelpString } from '@cmds/help';
+import { CliInputs, CmdOptions, PositionalArgs, CmdFnWithTestOutput } from '@types';
 
 type Commands = 'link' | 'unlink' | 'sync' | 'create';
 type CommandAliases = 'ln' | 'un' | 's' | 'c';
 
-type CommandsAndAliases = Commands | CommandAliases;
+export type CommandsAndAliases = Commands | CommandAliases;
 
 type CommandCenter = {
-  readonly [Key in CommandsAndAliases]: CmdFn;
+  readonly [Key in Commands | 'help']: CmdFnWithTestOutput<unknown>;
 };
 
-type incompleteCommandCenter = {
-  readonly [Key in CommandsAndAliases]: CmdFnWithTestOutput<unknown>;
-};
-
-export default function generateCommandCenter(): CommandCenter {
+function generateCommandCenter(): CommandCenter {
   const syncCmd = _syncCmd();
 
-  const incompleteCommandCenter: incompleteCommandCenter = {
-    // Link command
+  return {
     link: linkCmd,
-    ln: linkCmd,
-
-    // Unlink Command
     unlink: unlinkCmd,
-    un: unlinkCmd,
-
-    // Config group creation command
     create: createConfigGroupCmd,
-    c: createConfigGroupCmd,
-
-    // Sync command
     sync: syncCmd,
-    s: syncCmd,
+    help: helpCmd,
   };
+}
 
+export default function generateCmdHandlerFn(
+  commandToPerform: CommandsAndAliases
+): CmdFnWithTestOutput<unknown> {
+  const commandCenter = generateCommandCenter();
+
+  return (cmdArguments: PositionalArgs, cmdOptions: CmdOptions) => {
+    switch (commandToPerform) {
+      case 'link':
+      case 'ln':
+        return commandCenter.link(cmdArguments, cmdOptions);
+
+      case 'unlink':
+      case 'un':
+        return commandCenter.unlink(cmdArguments, cmdOptions);
+
+      case 'create':
+      case 'c':
+        return commandCenter.create(cmdArguments, cmdOptions);
+
+      case 'sync':
+      case 's':
+        return commandCenter.sync(cmdArguments, cmdOptions);
+
+      default:
+        return handleBadCommand(commandToPerform);
+    }
+  };
+}
+
+export function getCliCommand(cliInputs: CliInputs) {
   return pipe(
-    incompleteCommandCenter,
+    cliInputs,
+    A.head,
+    O.getOrElseW(() => 'no command')
+  ) as CommandsAndAliases;
+}
 
-    Rc.map(cmdHandlerFn =>
-      flow(cmdHandlerFn, TE.map(removeTestOutputFromCommandResponse))
-    )
+function handleBadCommand(badCommand: string) {
+  return pipe(
+    logErrors([generateBadCommandErrorMessage(badCommand)]),
+    IO.chain(() => logOutput([getHelpString()])),
+    IO.chain(() => exitCliWithCodeOnly(ExitCodes.COMMAND_NOT_FOUND)),
+    TE.left
   );
+}
+
+function generateBadCommandErrorMessage(badCommand: string) {
+  return `No action was taken because ${badCommand} is not a valid command. Please refer to help output below for valid usage 😄`;
 }
