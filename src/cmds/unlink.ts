@@ -3,23 +3,16 @@ import * as L from 'monocle-ts/lib/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as RC from 'fp-ts/lib/Record';
+import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
+import path from 'path';
+
 import { match, P } from 'ts-pattern';
-import { ExitCodes } from '../constants.js';
 import { pipe, flow } from 'fp-ts/lib/function';
+import { ExitCodes, spinner } from '../constants.js';
 import { bind, removeEntityAt } from '../utils/index';
 import { optionConfigConstructor } from '@lib/arg-parser';
-import {
-  File,
-  CmdOptions,
-  ConfigGroup,
-  PositionalArgs,
-  DestinationPath,
-  CurriedReturnType,
-  CmdResponseWithTestOutput,
-  CmdFnWithTestOutput,
-} from '@types';
 import {
   isNotIgnored,
   getFilesFromConfigGroup,
@@ -31,6 +24,16 @@ import {
   exitCliWithCodeOnly,
   getPathsToAllConfigGroupDirsInExistence,
 } from '@app/helpers';
+import {
+  File,
+  CmdOptions,
+  ConfigGroup,
+  PositionalArgs,
+  DestinationPath,
+  CurriedReturnType,
+  CmdFnWithTestOutput,
+  CmdResponseWithTestOutput,
+} from '@types';
 
 interface ParsedCmdOptions {
   readonly yes: boolean;
@@ -51,7 +54,15 @@ export default function main(
     ),
 
     TE.mapLeft(aggregateCmdErrors),
-    TE.chainW(flow(unlinkCmd, TE.rightTask))
+
+    TE.chainFirstIOK(configGroupNamesOrDirPaths =>
+      initiateSpinner(configGroupNamesOrDirPaths)
+    ),
+
+    TE.chainW(flow(unlinkCmd, TE.rightTask)),
+
+    TE.chainFirstIOK(() => stopSpinnerOnSuccess),
+    TE.mapLeft(flow(IO.chainFirst(() => stopSpinnerOnError)))
   );
 }
 
@@ -80,6 +91,15 @@ function aggregateCmdErrors(errors: ExitCodes.OK | Error) {
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
     .with(P.instanceOf(Error), (_, err) => exitCli(err.message, ExitCodes.GENERAL))
     .exhaustive();
+}
+
+function initiateSpinner(configGroupNamesOrDirPaths: string[]) {
+  const configGroupsNames = pipe(configGroupNamesOrDirPaths, A.map(path.basename));
+
+  return () =>
+    spinner.start(
+      `Unlinking files from the following config groups: ${configGroupsNames}...`
+    );
 }
 
 interface UnlinkOperationResponse {
@@ -167,4 +187,14 @@ function undoOperationPerformedByLinkCmd(destinationPaths: string[]) {
   );
 
   return pipe(destinationPaths, A.wilt(T.ApplicativePar)(undoOperation));
+}
+
+function stopSpinnerOnSuccess() {
+  return spinner.succeed('Unlinked config group files from their destinations');
+}
+
+function stopSpinnerOnError() {
+  return spinner.succeed(
+    'Failed to remove config group files from their destinations. Exiting...'
+  );
 }

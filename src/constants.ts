@@ -1,6 +1,7 @@
 import { pipe } from 'fp-ts/lib/function';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { default as ora, Options } from 'ora';
 
 export const ALL_FILES_CHAR = 'all';
 
@@ -28,11 +29,11 @@ export function getAbsolutePathsForFile(fileUrl: string) {
 
 export const __dirname = pipe(process.argv[1], dirname, dirname);
 
-export enum LogPrefixes {
-  ERROR = '❌',
-  WARNING = '⚠️',
-  OUTPUT = '✔️',
-}
+const spinnerOptions: Options = {
+  spinner: 'bouncingBall',
+};
+
+export const spinner = ora(spinnerOptions);
 
 export enum ExitCodes {
   OK = 0,

@@ -3,11 +3,13 @@ import * as O from 'fp-ts/lib/Option';
 import * as L from 'monocle-ts/lib/Lens';
 import * as RC from 'fp-ts/lib/Record';
 import * as RT from 'fp-ts/lib/ReaderTask';
+import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
-import { ExitCodes } from '../constants.js';
 import { flow, pipe } from 'fp-ts/lib/function';
 import { NonEmptyArray } from 'fp-ts/lib/NonEmptyArray';
+import { newAggregateError } from '@utils/AggregateError';
+import { ExitCodes, spinner } from '../constants.js';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import { doesPathExistSync, execShellCmd } from '../utils/index';
 import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
@@ -23,7 +25,6 @@ import {
   getPathToDotfilesDirPath,
   getPathToDotfilesDirPathRetrievalError,
 } from '@app/helpers';
-import { newAggregateError } from '@utils/AggregateError';
 
 interface ParsedCmdOptions {
   readonly message: string;
@@ -45,10 +46,20 @@ export function _main(gitInstance: E.Either<Error, GitInstance>) {
       gitInstance,
       TE.fromEither,
       TE.mapLeft(errorObj => exitCli(errorObj.message, ExitCodes.GENERAL)),
+
+      TE.chainFirstIOK(initiateSpinner),
+
       TE.chainW(({ git, dotfilesDirPath }) =>
         pipe(syncCmd(git)(dotfilesDirPath)(cmdOptions), TE.rightTask)
-      )
+      ),
+
+      TE.chainFirstIOK(() => stopSpinnerOnSuccess),
+      TE.mapLeft(flow(IO.chainFirst(() => stopSpinnerOnError)))
     );
+}
+
+function initiateSpinner() {
+  return () => spinner.start('Syncing dotfiles changes...');
 }
 
 // EXPORTED FOR TESTING PURPOSES ONLY
@@ -246,6 +257,14 @@ function rawMessageParser([message]: NonEmptyArray<string>): string {
 // EXPORTED FOR TESTING PURPOSES ONLY
 export function generateDefaultCommitMessage() {
   return 'chore: dotfiles update!';
+}
+
+function stopSpinnerOnSuccess() {
+  return spinner.succeed('Sync complete!');
+}
+
+function stopSpinnerOnError() {
+  return spinner.succeed('Sync failed. Exiting...');
 }
 
 const main = () => _main(generateGitInstance());

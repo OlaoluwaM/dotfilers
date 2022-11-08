@@ -2,14 +2,15 @@ import * as A from 'fp-ts/lib/Array';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as RC from 'fp-ts/lib/Record';
+import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
 
 import { match, P } from 'ts-pattern';
 import { flow, pipe } from 'fp-ts/lib/function';
-import { ExitCodes } from '../constants.js';
 import { newAggregateError } from '@utils/AggregateError';
+import { ExitCodes, spinner } from '../constants.js';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import {
   isNotIgnored,
@@ -70,7 +71,15 @@ export default function main(
     ),
 
     TE.mapLeft(aggregateCmdErrors),
-    TE.chainW(flow(linkCmd, TE.rightTask))
+
+    TE.chainFirstIOK(({ configGroupNamesOrDirPaths }) =>
+      initiateSpinner(configGroupNamesOrDirPaths)
+    ),
+
+    TE.chainW(flow(linkCmd, TE.rightTask)),
+
+    TE.chainFirstIOK(() => stopSpinnerOnSuccess),
+    TE.mapLeft(flow(IO.chainFirst(() => stopSpinnerOnError)))
   );
 }
 
@@ -111,6 +120,13 @@ function aggregateCmdErrors(errors: ExitCodes.OK | Error) {
     .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
     .with(P.instanceOf(Error), (_, err) => exitCli(err.message, ExitCodes.GENERAL))
     .exhaustive();
+}
+
+function initiateSpinner(configGroupNamesOrDirPaths: string[]) {
+  const configGroupsNames = pipe(configGroupNamesOrDirPaths, A.map(path.basename));
+
+  return () =>
+    spinner.start(`Linking files from the following config groups: ${configGroupsNames}...`);
 }
 
 interface LinkOperationResponse {
@@ -248,4 +264,12 @@ function matchDesiredLinkOperation(linkOperationType: LinkCmdOperationType) {
           deleteThenSymlink(pathToSourceEntity, destinationPath)
         )
         .exhaustive();
+}
+
+function stopSpinnerOnSuccess() {
+  return spinner.succeed('Linking complete!');
+}
+
+function stopSpinnerOnError() {
+  return spinner.succeed('Linking failed. Exiting...');
 }
