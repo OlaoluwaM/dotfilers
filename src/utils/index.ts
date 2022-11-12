@@ -33,10 +33,6 @@ import {
   ParsedCmdResponse,
 } from '@types';
 
-export function getCLIArguments(startingInd: number) {
-  return slice(startingInd, Infinity)(process.argv);
-}
-
 // NOTE: For debugging purposes only
 export function trace<T>(...logContents: string[]) {
   return (val: T) => {
