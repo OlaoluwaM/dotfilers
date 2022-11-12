@@ -33,6 +33,7 @@ ${chalk.yellow.bold('FLAGS:')}
   -v, --version                Output version information.
   -q, --quiet                  Suppress stdout output, but not stderr output
   -y, --yes                    Used with both the link and unlink commands to bypass confirmation prompt and attempt to operate on all config groups
+  -i, --interactive            Used with both the link and unlink commands to allow users pick, from a list, the config groups they wish to operate on
 
 ${chalk.yellow.bold('EXAMPLES:')}
   dotfilers link config-group1 config-group2 config-group3

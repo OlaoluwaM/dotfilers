@@ -1,8 +1,9 @@
+import * as A from 'fp-ts/lib/Array';
 import * as L from 'monocle-ts/lib/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
-import * as IO from 'fp-ts/lib/IO';
 import * as RA from 'fp-ts/lib/ReadonlyArray';
+import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
 import * as RNEA from 'fp-ts/lib/ReadonlyNonEmptyArray';
 
@@ -13,8 +14,9 @@ import prompts from 'prompts';
 
 import { not } from 'fp-ts/lib/Predicate';
 import { omit } from 'ramda';
-import { flow, pipe } from 'fp-ts/lib/function';
+import { constant, constFalse, flow, pipe } from 'fp-ts/lib/function';
 import { default as readdirp, ReaddirpOptions } from 'readdirp';
+import { removeCommonPathSegment, removeLeadingPathSeparator } from '@utils/index';
 import {
   isValidShellExpansion,
   expandShellVariablesInString,
@@ -133,9 +135,65 @@ function promptForConfirmation(overridePrompt: boolean) {
         message: 'Do you wish to operate on all config groups?',
         initial: false,
       },
-      { onCancel: () => false }
+      { onCancel: constFalse }
     );
   };
+}
+
+export function getPathsToAllConfigGroupDirsInExistenceInteractively() {
+  return flow(
+    getAllConfigGroupDirPaths,
+    TE.bindTo('allConfigGroupDirPaths'),
+
+    TE.let('configGroupDirPathsWithoutCommonPrefix', ({ allConfigGroupDirPaths }) =>
+      pipe(
+        allConfigGroupDirPaths,
+        removeCommonPathSegment,
+        A.map(removeLeadingPathSeparator)
+      )
+    ),
+
+    TE.chainW(flow(toInteractivePromptChoices, TE.right)),
+    TE.chainTaskK(promptForConfigGroupMultiSelection),
+    TE.filterOrElseW(A.isNonEmpty, () => ExitCodes.OK as const)
+  );
+}
+
+interface ConfigGroupChoice {
+  title: string;
+  dirPath: string;
+}
+
+function toInteractivePromptChoices({
+  allConfigGroupDirPaths,
+  configGroupDirPathsWithoutCommonPrefix,
+}: {
+  allConfigGroupDirPaths: string[];
+  configGroupDirPathsWithoutCommonPrefix: string[];
+}): ConfigGroupChoice[] {
+  return pipe(
+    allConfigGroupDirPaths,
+    A.mapWithIndex((ind, configGroupDirPath) => ({
+      title: configGroupDirPathsWithoutCommonPrefix[ind],
+      dirPath: configGroupDirPath,
+    }))
+  );
+}
+
+function promptForConfigGroupMultiSelection(
+  configGroupChoices: ConfigGroupChoice[]
+) {
+  return async () =>
+    (await prompts(
+      {
+        type: 'autocompleteMultiselect',
+        name: 'dirPath',
+        message: 'Pick the config groups to work on',
+        choices: configGroupChoices,
+        hint: '- Space to select. Return to submit',
+      },
+      { onCancel: constant([]) }
+    )) as string[];
 }
 
 export function getAllConfigGroupDirPaths(): TE.TaskEither<Error, string[]> {

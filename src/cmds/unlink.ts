@@ -9,8 +9,8 @@ import * as TE from 'fp-ts/lib/TaskEither';
 import path from 'path';
 
 import { match, P } from 'ts-pattern';
-import { pipe, flow } from 'fp-ts/lib/function';
 import { ExitCodes, spinner } from '../constants';
+import { pipe, flow, constTrue } from 'fp-ts/lib/function';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import { arrayToList, bind, removeEntityAt } from '@utils/index';
 import {
@@ -23,6 +23,7 @@ import {
   getParsedOptions,
   exitCliWithCodeOnly,
   getPathsToAllConfigGroupDirsInExistence,
+  getPathsToAllConfigGroupDirsInExistenceInteractively,
 } from '@app/helpers';
 import {
   File,
@@ -37,6 +38,7 @@ import {
 
 interface ParsedCmdOptions {
   readonly yes: boolean;
+  readonly interactive: boolean;
 }
 
 export default function main(
@@ -47,9 +49,9 @@ export default function main(
     TE.of(cmdOptions),
     TE.map(parseUnlinkCmdOptions),
 
-    TE.chain(({ yes }) =>
+    TE.chain(parsedCmdOptions =>
       A.isEmpty(cmdArguments)
-        ? getPathsToAllConfigGroupDirsInExistence(yes)
+        ? promptForConfigGroupsBasedOnCmdOptions(parsedCmdOptions)
         : TE.right(cmdArguments)
     ),
 
@@ -78,12 +80,33 @@ function generateOptionConfig() {
   return {
     options: {
       yes: optionConfigConstructor({
-        parser: () => true,
+        parser: constTrue,
         isFlag: true,
         aliases: ['y'],
       }),
+
+      interactive: optionConfigConstructor({
+        parser: constTrue,
+        isFlag: true,
+        aliases: ['i'],
+      }),
     },
   };
+}
+
+function promptForConfigGroupsBasedOnCmdOptions(cmdOptions: ParsedCmdOptions) {
+  const { yes, interactive } = cmdOptions;
+  const relevantOptionCombinations: [boolean, boolean] = [yes, interactive];
+
+  return match(relevantOptionCombinations)
+    .with(P.union([true, false], [false, false]), () =>
+      getPathsToAllConfigGroupDirsInExistence(yes)
+    )
+    .with(
+      P.union([true, true], [false, true]),
+      getPathsToAllConfigGroupDirsInExistenceInteractively()
+    )
+    .exhaustive();
 }
 
 function aggregateCmdErrors(errors: ExitCodes.OK | Error) {

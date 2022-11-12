@@ -8,9 +8,9 @@ import * as TE from 'fp-ts/lib/TaskEither';
 import path from 'path';
 
 import { match, P } from 'ts-pattern';
-import { flow, pipe } from 'fp-ts/lib/function';
 import { newAggregateError } from '@utils/AggregateError';
 import { ExitCodes, spinner } from '../constants';
+import { constTrue, flow, pipe } from 'fp-ts/lib/function';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import {
   isNotIgnored,
@@ -31,6 +31,7 @@ import {
   exitCliWithCodeOnly,
   linkOperationTypeToPastTense,
   getPathsToAllConfigGroupDirsInExistence,
+  getPathsToAllConfigGroupDirsInExistenceInteractively,
 } from '@app/helpers';
 import {
   File,
@@ -49,6 +50,7 @@ interface ParsedCmdOptions {
   readonly hardlink: boolean;
   readonly copy: boolean;
   readonly yes: boolean;
+  readonly interactive: boolean;
 }
 
 // TODO: Find Better Name for this interface and corresponding parameters
@@ -65,9 +67,9 @@ export default function main(
     TE.Do,
     TE.let('parsedLinkCmdOptions', () => parseCmdOptions(cmdOptions)),
 
-    TE.bind('configGroupNamesOrDirPaths', ({ parsedLinkCmdOptions: { yes } }) =>
+    TE.bind('configGroupNamesOrDirPaths', ({ parsedLinkCmdOptions }) =>
       A.isEmpty(cmdArguments)
-        ? getPathsToAllConfigGroupDirsInExistence(yes)
+        ? promptForConfigGroupsBasedOnCmdOptions(parsedLinkCmdOptions)
         : TE.right(cmdArguments)
     ),
 
@@ -96,24 +98,45 @@ function generateOptionConfig() {
   return {
     options: {
       hardlink: optionConfigConstructor({
-        parser: () => true,
+        parser: constTrue,
         isFlag: true,
         aliases: ['H'],
       }),
 
       copy: optionConfigConstructor({
-        parser: () => true,
+        parser: constTrue,
         isFlag: true,
         aliases: ['c'],
       }),
 
       yes: optionConfigConstructor({
-        parser: () => true,
+        parser: constTrue,
         isFlag: true,
         aliases: ['y'],
       }),
+
+      interactive: optionConfigConstructor({
+        parser: constTrue,
+        isFlag: true,
+        aliases: ['i'],
+      }),
     },
   };
+}
+
+function promptForConfigGroupsBasedOnCmdOptions(cmdOptions: ParsedCmdOptions) {
+  const { yes, interactive } = cmdOptions;
+  const relevantOptionCombinations: [boolean, boolean] = [yes, interactive];
+
+  return match(relevantOptionCombinations)
+    .with(P.union([true, false], [false, false]), () =>
+      getPathsToAllConfigGroupDirsInExistence(yes)
+    )
+    .with(
+      P.union([true, true], [false, true]),
+      getPathsToAllConfigGroupDirsInExistenceInteractively()
+    )
+    .exhaustive();
 }
 
 function aggregateCmdErrors(errors: ExitCodes.OK | Error) {

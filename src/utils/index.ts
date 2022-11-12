@@ -5,6 +5,7 @@ import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
 import * as IO from 'fp-ts/lib/IO';
 import * as TE from 'fp-ts/lib/TaskEither';
+import * as NEA from 'fp-ts/lib/NonEmptyArray';
 
 import chalk from 'chalk';
 import fsExtra from 'fs-extra';
@@ -14,7 +15,7 @@ import { exec } from 'child_process';
 import { getEnv } from '@lib/shellVarStrExpander';
 import { match, P } from 'ts-pattern';
 import { promisify } from 'util';
-import { isEmpty, slice } from 'ramda';
+import { isEmpty, slice, transpose } from 'ramda';
 import { copyFile, link, symlink, unlink } from 'fs/promises';
 import { SHELL_EXEC_MOCK_VAR_NAME, SHELL_EXEC_MOCK_ERROR_HOOK } from '../constants';
 import {
@@ -243,8 +244,64 @@ export function reArrangeCmdResponseTypeOrder(
 export function arrayToList(arr: string[]): string {
   const arrCopy = [...arr];
 
-  const indexOfLastElement = arrCopy.length - 1;
-  arrCopy[indexOfLastElement] = `and ${arrCopy[indexOfLastElement]}`;
+  switch (arrCopy.length) {
+    case 0:
+      return '';
 
-  return pipe(arrCopy, A.intercalate(S.Monoid)(', '));
+    case 1:
+      return arrCopy[0];
+
+    case 2:
+      return `${arrCopy[0]} and ${arrCopy[1]}`;
+
+    case 3:
+      return `${arrCopy[0]}, ${arrCopy[1]}, and ${arrCopy[2]}`;
+
+    default: {
+      const [elemOne, elemTwo, elemThree, ...rest] = arrCopy;
+      return `${elemOne}, ${elemTwo}, ${elemThree}, and ${rest.length} others`;
+    }
+  }
+}
+
+type Paths = string[];
+
+export function removeCommonPathSegment(paths: Paths) {
+  // Solution Derived from https://rosettacode.org/wiki/Find_common_directory_path#JavaScript
+
+  const commonPathSegment = getCommonPathSegment(paths);
+  return pipe(paths, A.map(S.replace(commonPathSegment, '')));
+}
+
+function getCommonPathSegment(paths: Paths): string {
+  const PATH_DELIMITER = '/';
+
+  return pipe(
+    paths,
+    A.map(nonEmptyArraySplit(PATH_DELIMITER)),
+    transpose,
+    A.filter(allElementsAreEqual),
+    A.map(a => a[0]),
+    A.intercalate(S.Monoid)(PATH_DELIMITER)
+  );
+}
+
+function nonEmptyArraySplit(separator: string) {
+  return (str: string) => str.split(separator) as NEA.NonEmptyArray<string>;
+}
+
+function allElementsAreEqual<T>(arr: T[]): boolean {
+  return pipe(
+    arr,
+    A.every(element => element === arr[0])
+  );
+}
+
+export function removeLeadingPathSeparator(strWithLeadingPathSeparator: string): string {
+  const LEADING_PATH_SEPARATOR_REGEX = /^\/+/;
+
+  return pipe(
+    strWithLeadingPathSeparator,
+    S.replace(LEADING_PATH_SEPARATOR_REGEX, '')
+  );
 }
