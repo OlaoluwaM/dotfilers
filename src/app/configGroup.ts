@@ -1,6 +1,7 @@
 import * as d from 'io-ts/lib/Decoder';
 import * as A from 'fp-ts/lib/Array';
 import * as E from 'fp-ts/lib/Either';
+import * as L from 'monocle-ts/lib/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as R from 'fp-ts/lib/Record';
 import * as S from 'fp-ts/lib/string';
@@ -16,10 +17,10 @@ import micromatch from 'micromatch';
 import { match, P } from 'ts-pattern';
 import { MonoidAny } from 'fp-ts/lib/boolean';
 import { flow, pipe } from 'fp-ts/lib/function';
+import { compose, omit, pick } from 'ramda';
 import { DestinationPathDecoder } from './decoders';
 import { newAggregateError, addError } from '@utils/AggregateError';
 import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
-import { compose, lensProp, omit, pick, view } from 'ramda';
 import { readJson, doesPathExist, getOnlyValueFromEntriesArr } from '@utils/index';
 import {
   getPathToDotfilesDirPath,
@@ -383,8 +384,8 @@ function generateFilesArrFromFileRecord(fileRecord: FileRecord): File[] {
 }
 
 export function getFilesFromConfigGroup(configGroupObj: ConfigGroup) {
-  const filesLens = lensProp<ConfigGroup, 'files'>('files');
-  return view(filesLens, configGroupObj);
+  const FilesLens = pipe(L.id<ConfigGroup>(), L.prop('files'));
+  return pipe(configGroupObj, FilesLens.get);
 }
 
 export function isNotIgnored(fileObj: File): boolean {

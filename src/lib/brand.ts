@@ -78,6 +78,10 @@ export type AnyBrand = Brand<unknown, any, any>;
  */
 export type Brander<B extends AnyBrand> = (underlying: BaseOf<B>) => B;
 
+export type ExcludeNonBrands<UnionWithBrands> = UnionWithBrands extends AnyBrand
+  ? UnionWithBrands
+  : never;
+
 /**
  * A generic function that, when given some branded type, can take a value with
  * the base type of the branded type, and cast that value to the branded type.
@@ -113,3 +117,40 @@ function brander<B extends AnyBrand>(brandBase: BaseOf<B>): B {
 export function createBrander<B extends AnyBrand>(): Brander<B> {
   return brander;
 }
+
+// FLAVORING SUPPORT
+// https://spin.atomicobject.com/2018/01/15/typescript-flexible-nominal-typing/
+
+export type Flavor<
+  Base,
+  FlavoringT extends string,
+  FlavoringProp extends string = '__type__'
+> = Base extends _AnyFlavor
+  ? SubFlavor<Base, FlavoringT, FlavoringProp>
+  : BasicFlavor<Base, FlavoringT, FlavoringProp>;
+
+type _AnyFlavor = unknown & { __inner_tag__?: { [K in any]: any } } & {
+  __base__?: any;
+};
+
+type BasicFlavor<
+  Base,
+  BrandingT,
+  BrandingProp extends string = '__type__'
+> = Base & {
+  __inner_tag__?: { [K in BrandingProp]: BrandingT };
+} & { __base__?: Base };
+
+type SubFlavor<
+  Base extends _AnyFlavor,
+  BrandingT extends string,
+  BrandingProp extends string = '__type__'
+> = FlavorBaseOf<Base> & {
+  __inner_tag__?: Base['__inner_tag__'] & {
+    [_ in BrandingT]: { [K in BrandingProp]: BrandingT };
+  };
+} & { __base__?: FlavorBaseOf<Base> };
+
+export type FlavorBaseOf<B extends AnyFlavor> = NonNullable<B['__base__']>;
+
+export type AnyFlavor = Flavor<unknown, any, any>;

@@ -10,16 +10,23 @@ import path from 'path';
 import prompts from 'prompts';
 import micromatch from 'micromatch';
 
-import { pipe } from 'fp-ts/lib/function';
 import { compose } from 'ramda';
+import { flow, pipe } from 'fp-ts/lib/function';
 import { MonoidAll } from 'fp-ts/lib/boolean';
 import { concatAll } from 'fp-ts/lib/Monoid';
-import { default as linkCmd } from '@cmds/link';
+import { default as _linkCmd } from '@cmds/link';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { createDirIfItDoesNotExist } from '@utils/index';
 import { getAllConfigGroupDirPaths } from '@app/helpers';
 import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
-import { DestinationPath, File, SourcePath } from '@types';
+import {
+  File,
+  SourcePath,
+  toCmdOptions,
+  DestinationPath,
+  toPositionalArgs,
+  CurriedReturnType,
+} from '@types';
 import {
   ExitCodes,
   EXCLUDE_KEY,
@@ -29,6 +36,8 @@ import {
 } from '../src/constants';
 import {
   isSymlink,
+  ExcludeFn,
+  ExtractFn,
   isHardlink,
   manualFail,
   createFile,
@@ -45,6 +54,15 @@ import {
   getNonIgnoredFilesFromConfigGroups,
   getAllDestinationPathsFromConfigGroups,
 } from './helpers';
+
+// TODO: Implement tests using TaskEither Interface instead
+const linkCmd = flow(_linkCmd, TE.toUnion);
+
+type CmdOutput = Awaited<CurriedReturnType<typeof linkCmd>>;
+
+export type CmdDataOutput = ExcludeFn<CmdOutput>;
+
+type ProcessExitFn = ExtractFn<CmdOutput>;
 
 const LINK_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/link`;
 const LINK_TEST_ASSERT_DIR = `${LINK_TEST_DATA_DIR}/mock-home`;
@@ -68,15 +86,18 @@ function getSourceAndDestinationPathsFromFileObj(configGroupFileObj: File) {
   ] as [SourcePath, DestinationPath];
 }
 
-const VALID_MOCK_CONFIG_GRP_NAMES = ['npm', 'bat', 'neovim', 'git'];
+const VALID_MOCK_CONFIG_GRP_NAMES = pipe(
+  ['npm', 'bat', 'neovim', 'git'],
+  toPositionalArgs
+);
 
 describe('Tests for the happy path', () => {
   test(`Should ensure that link command correctly creates symlinks of files at their intended destinations when both ${SHELL_VARS_TO_CONFIG_GRP_DIRS[0]} and ${SHELL_VARS_TO_CONFIG_GRP_DIRS[1]} variables are set`, async () => {
     // Arrange
     // Act
-    const { errors, forTest: configGroups } = await linkCmd(
-      VALID_MOCK_CONFIG_GRP_NAMES
-    );
+    const cmdOutput = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [])();
+
+    const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
     const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
@@ -98,9 +119,9 @@ describe('Tests for the happy path', () => {
       process.env[envVarName] = '';
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd(
-        VALID_MOCK_CONFIG_GRP_NAMES
-      );
+      const cmdOutput = await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [])();
+
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
@@ -124,10 +145,12 @@ describe('Tests for the happy path', () => {
     async mockOptions => {
       // Arrange
       // Act
-      const { errors, forTest: configGroups } = await linkCmd(
+      const cmdOutput = await linkCmd(
         VALID_MOCK_CONFIG_GRP_NAMES,
-        [mockOptions]
-      );
+        toCmdOptions([mockOptions])
+      )();
+
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const sourceAndDestinationPaths = pipe(
         configGroups,
@@ -156,10 +179,12 @@ describe('Tests for the happy path', () => {
     async mockOptions => {
       // Arrange
       // Act
-      const { errors, forTest: configGroups } = await linkCmd(
+      const cmdOutput = await linkCmd(
         VALID_MOCK_CONFIG_GRP_NAMES,
-        [mockOptions]
-      );
+        toCmdOptions([mockOptions])
+      )();
+
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
@@ -176,10 +201,12 @@ describe('Tests for the happy path', () => {
   test('Should ensure that the link command defaults to symlinking files to their destinations should clashing options be supplied (--hardlink and --copy)', async () => {
     // Arrange
     // Act
-    const { errors, forTest: configGroups } = await linkCmd(
+    const cmdOutput = await linkCmd(
       VALID_MOCK_CONFIG_GRP_NAMES,
-      ['-H', '--copy']
-    );
+      toCmdOptions(['-H', '--copy'])
+    )();
+
+    const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
     const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
@@ -206,10 +233,12 @@ describe('Tests for the happy path', () => {
       process.env.DOTFILES = `${LINK_TEST_DATA_DIR}/valid-mock-dots`;
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd(
+      const cmdOutput = await linkCmd(
         [],
-        mockOptions.concat(['-y'])
-      );
+        toCmdOptions(mockOptions.concat(['-y']))
+      )();
+
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
@@ -248,11 +277,13 @@ describe('Tests for the happy path', () => {
     async (testDescription, mockConfigGroupNames) => {
       // Arrange
       // Act
+      const cmdOutput = await linkCmd(toPositionalArgs(mockConfigGroupNames), [])();
+
       const {
         errors,
-        output: actualCmdOutput,
-        forTest: configGroups,
-      } = await linkCmd(mockConfigGroupNames);
+        output: cmdResponse,
+        testOutput: configGroups,
+      } = cmdOutput as CmdDataOutput;
 
       const destinationPathsOfNonIgnoredFilesOnly = pipe(
         getNonIgnoredFilesFromConfigGroups(configGroups),
@@ -283,7 +314,7 @@ describe('Tests for the happy path', () => {
       expect(allIgnoredFilesWereSymlinked).toBeFalse();
 
       if (isTestForIgnoringAllFiles) {
-        expect(actualCmdOutput).toEqual([]);
+        expect(cmdResponse).toEqual([]);
         expect(destinationPathsOfNonIgnoredFilesOnly).toEqual([]);
       } else {
         expect(allNonIgnoredFilesWereSymlinked).toBeTrue();
@@ -324,7 +355,8 @@ describe('Tests for the happy path', () => {
     await mockConfigGroupDestinationRecordCreationTask();
 
     // Act
-    const { errors, forTest: configGroups } = await linkCmd([mockConfigGroupName]);
+    const cmdOutput = await linkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+    const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
     const defaultDestinationPath = expandShellVariablesInString(
       defaultDestinationPathShellStr
@@ -361,7 +393,8 @@ describe('Tests for the happy path', () => {
     async (_, mockConfigGroupNames) => {
       // Arrange
       // Act
-      const { errors, forTest: configGroups } = await linkCmd(mockConfigGroupNames);
+      const cmdOutput = await linkCmd(toPositionalArgs(mockConfigGroupNames), [])();
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const destinationPaths = getAllDestinationPathsFromConfigGroups(configGroups);
 
@@ -421,7 +454,8 @@ describe('Tests for the happy path', () => {
       await mockConfigGroupDestinationRecordCreationTask();
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd([mockConfigGroupName]);
+      const cmdOutput = await linkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const configGroupFileNames = getFileNamesFromConfigGroups(configGroups);
 
@@ -491,7 +525,8 @@ describe('Tests for the happy path', () => {
       await mockConfigGroupDestinationRecordCreationTask();
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd([mockConfigGroupName]);
+      const cmdOutput = await linkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const configGroupFileNames = getFileNamesFromConfigGroups(configGroups);
 
@@ -582,7 +617,8 @@ describe('Tests for the happy path', () => {
       await mockConfigGroupDestinationRecordCreationTask();
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd([mockConfigGroupName]);
+      const cmdOutput = await linkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const ignoredFileNames = pipe(
         getIgnoredFilesFromConfigGroups(configGroups),
@@ -645,7 +681,8 @@ describe('Tests for the happy path', () => {
       await mockConfigGroupDestinationRecordCreationTask();
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd([mockConfigGroupName]);
+      const cmdOutput = await linkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const configGroupFileNames = getFileNamesFromConfigGroups(configGroups);
 
@@ -723,10 +760,12 @@ describe('Tests for the happy path', () => {
         await mockConfigGroupDestinationRecordCreationTask();
 
         // Act
-        const { errors, forTest: configGroups } = await linkCmd(
-          [mockConfigGroupName],
-          cmdOptions
-        );
+        const cmdOutput = await linkCmd(
+          toPositionalArgs([mockConfigGroupName]),
+          toCmdOptions(cmdOptions)
+        )();
+
+        const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
         const fileRecord = fileRecordLens.get(configGroups[0]);
         const destinationPaths =
@@ -797,7 +836,8 @@ describe('Tests for the happy path', () => {
       await mockConfigGroupDestinationRecordCreationTask();
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd([mockConfigGroupName]);
+      const cmdOutput = await linkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const expectedDestinationPath = expandShellVariablesInString(
         nestedFileDestinationPathShellStr
@@ -862,7 +902,8 @@ describe('Tests for the happy path', () => {
       await mockConfigGroupDestinationRecordCreationTask();
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd([mockConfigGroupName]);
+      const cmdOutput = await linkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const ignoredFiles = getIgnoredFilesFromConfigGroups(configGroups);
 
@@ -889,7 +930,7 @@ describe('Tests for the happy path', () => {
       ['copy', ['--copy']],
     ])(
       'Should ensure that the link command can %s files within nested config groups',
-      async (_, mockCLIOptions) => {
+      async (_, cmdOptions) => {
         // Arrange
         const mockConfigGroupName = 'nestedConfigGroup';
         const nestedConfigGroupDefaultDestPathShellStr = '$HOME/.mock/nested';
@@ -951,10 +992,12 @@ describe('Tests for the happy path', () => {
         await mockTopLevelConfigGroupDestinationRecordCreationTask();
 
         // Act
-        const { errors, forTest: configGroups } = await linkCmd(
-          [`${mockConfigGroupName}/${nestedConfigGroupName}`],
-          mockCLIOptions
-        );
+        const cmdOutput = await linkCmd(
+          toPositionalArgs([`${mockConfigGroupName}/${nestedConfigGroupName}`]),
+          toCmdOptions(cmdOptions)
+        )();
+
+        const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
         const fileNames = getFileNamesFromConfigGroups(configGroups);
         const nestedConfigGroupDestinationPaths =
@@ -1080,10 +1123,15 @@ describe('Tests for the happy path', () => {
       await mockTopLevelConfigGroupDestinationRecordCreationTask();
 
       // Act
-      const { errors, forTest: configGroups } = await linkCmd([
-        mockConfigGroupName,
-        `${mockConfigGroupName}/${nestedConfigGroupName}`,
-      ]);
+      const cmdOutput = await linkCmd(
+        toPositionalArgs([
+          mockConfigGroupName,
+          `${mockConfigGroupName}/${nestedConfigGroupName}`,
+        ]),
+        []
+      )();
+
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
 
       const nestedConfigGroupFileNames = getFileNamesFromConfigGroups([
         configGroups[1],
@@ -1111,19 +1159,24 @@ describe('Tests for the happy path', () => {
 });
 
 describe('Tests for everything but the happy path', () => {
-  const INVALID_MOCK_CONFIG_GRP_NAMES = ['node', 'spicetify', 'notion', 'cava'];
+  const INVALID_MOCK_CONFIG_GRP_NAMES = pipe(
+    ['node', 'spicetify', 'notion', 'cava'],
+    toPositionalArgs
+  );
 
   test('Should check that the link command performs no operation if the specified config groups do not exist', async () => {
     // Arrange
     // Act
+    const cmdOutput = await linkCmd(INVALID_MOCK_CONFIG_GRP_NAMES, [])();
+
     const {
       errors,
-      output: actualCmdOutput,
-      forTest: configGroups,
-    } = await linkCmd(INVALID_MOCK_CONFIG_GRP_NAMES);
+      output: cmdResponse,
+      testOutput: configGroups,
+    } = cmdOutput as CmdDataOutput;
 
     // Assert
-    expect([configGroups, actualCmdOutput]).toEqual([[], []]);
+    expect([configGroups, cmdResponse]).toEqual([[], []]);
 
     expect(errors.length).toBeGreaterThanOrEqual(
       INVALID_MOCK_CONFIG_GRP_NAMES.length
@@ -1141,15 +1194,17 @@ describe('Tests for everything but the happy path', () => {
       process.env.DOTFILES = '';
 
       // Act
+      const cmdOutput = await linkCmd(INVALID_MOCK_CONFIG_GRP_NAMES, [])();
+
       const {
         errors,
-        output: actualCmdOutput,
-        forTest: configGroups,
-      } = await linkCmd(mockConfigGroupNames);
+        output: cmdResponse,
+        testOutput: configGroups,
+      } = cmdOutput as CmdDataOutput;
 
       // Assert
       expect(errors.length).toBeGreaterThanOrEqual(mockConfigGroupNames.length);
-      expect([configGroups, actualCmdOutput]).toEqual([[], []]);
+      expect([configGroups, cmdResponse]).toEqual([[], []]);
 
       // Cleanup
       process.env.DOTS = MOCK_DOTS_DIR;
@@ -1162,7 +1217,8 @@ describe('Tests for everything but the happy path', () => {
     prompts.inject([false]);
 
     // Act
-    await linkCmd([]);
+    const cmdOutput = (await linkCmd([], [])()) as ProcessExitFn;
+    cmdOutput();
 
     // Assert
     expect(process.exit).toHaveBeenCalledWith(ExitCodes.OK);

@@ -3,16 +3,18 @@
 import * as A from 'fp-ts/lib/Array';
 import * as T from 'fp-ts/lib/Task';
 import * as RA from 'fp-ts/lib/ReadonlyArray';
+import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
+import fsExtra from 'fs-extra';
 
 import { rm } from 'fs/promises';
 import { pipe } from 'fp-ts/lib/function';
-import { fs as fsExtra } from 'zx';
+import { toPositionalArgs } from '@types';
 import { TEST_DATA_DIR_PREFIX } from './setup';
 import { default as createConfigGroupCmd } from '@cmds/createConfigGroup';
 import { DEFAULT_DEST_RECORD_FILE_CONTENTS } from '@app/configGroup';
-import { defaultDestRecordEq, generatePath } from './helpers';
+import { manualFail, generatePath, defaultDestRecordEq } from './helpers';
 import {
   ExitCodes,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
@@ -62,30 +64,51 @@ describe('Tests for the happy path', () => {
       process.env[envVarName] = '';
 
       // Act
-      const {
-        errors,
-        warnings,
-        forTest: configGroupDirPaths,
-      } = await createConfigGroupCmd(
-        nonExistingConfigGroupNames.concat(NAMES_OF_EXISTING_CONFIG_GRPS)
+      const cmdOutputTE = createConfigGroupCmd(
+        toPositionalArgs(
+          nonExistingConfigGroupNames.concat(NAMES_OF_EXISTING_CONFIG_GRPS)
+        ),
+        []
       );
 
-      const numOfCreatedConfigGroups = await pipe(
-        configGroupDirPaths,
-        T.traverseArray(configGroupDirPath =>
+      // Assert
+      await pipe(
+        cmdOutputTE,
+
+        TE.bindW('numOfCreatedConfigGroups', ({ testOutput }) =>
           pipe(
-            path.join(configGroupDirPath, CONFIG_GRP_DEST_RECORD_FILE_NAME),
-            diffDestinationRecordFile
+            testOutput,
+            T.traverseArray(configGroupDirPath =>
+              pipe(
+                path.join(configGroupDirPath, CONFIG_GRP_DEST_RECORD_FILE_NAME),
+                diffDestinationRecordFile
+              )
+            ),
+            T.map(RA.filter(Boolean)),
+            T.map(RA.size),
+            TE.rightTask
           )
         ),
-        T.map(RA.filter(Boolean)),
-        T.map(RA.size)
-      )();
 
-      // Assert
-      expect(errors).toBeEmpty();
-      expect(warnings).toBeArrayOfSize(NAMES_OF_EXISTING_CONFIG_GRPS.length);
-      expect(numOfCreatedConfigGroups).toBe(nonExistingConfigGroupNames.length);
+        TE.fold(
+          () => () =>
+            Promise.reject(
+              manualFail(
+                "Expected a 'CmdResponse' object, but got a CLI exit function"
+              )
+            ),
+
+          ({ errors, warnings, numOfCreatedConfigGroups }) =>
+            async () => {
+              expect(errors).toBeEmpty();
+              expect(warnings).toBeArrayOfSize(NAMES_OF_EXISTING_CONFIG_GRPS.length);
+
+              expect(numOfCreatedConfigGroups).toBe(
+                nonExistingConfigGroupNames.length
+              );
+            }
+        )
+      )();
 
       // Cleanup
       process.env[envVarName] = MOCK_DOTS_DIR;
@@ -101,25 +124,51 @@ describe('Tests for the happy path', () => {
     );
 
     // Act
-    const {
-      errors,
-      warnings,
-      forTest: configGroupDirPaths,
-    } = await createConfigGroupCmd([nameOfMockNestedConfigGroup]);
-
-    const nestedConfigGroupHasValidDefaultDestinationRecordFile = await pipe(
-      path.join(expectedPathToNestedConfigGroup, CONFIG_GRP_DEST_RECORD_FILE_NAME),
-      diffDestinationRecordFile
-    )();
+    const cmdOutputTE = createConfigGroupCmd(
+      toPositionalArgs([nameOfMockNestedConfigGroup]),
+      []
+    );
 
     // Assert
-    expect(errors).toBeEmpty();
-    expect(warnings).toBeEmpty();
-    expect(nestedConfigGroupHasValidDefaultDestinationRecordFile).toBeTrue();
+    await pipe(
+      cmdOutputTE,
 
-    expect(configGroupDirPaths).toIncludeSameMembers([
-      expectedPathToNestedConfigGroup,
-    ]);
+      TE.bindW('nestedConfigGroupHasValidDefaultDestinationRecordFile', () =>
+        pipe(
+          path.join(
+            expectedPathToNestedConfigGroup,
+            CONFIG_GRP_DEST_RECORD_FILE_NAME
+          ),
+          diffDestinationRecordFile,
+          TE.rightTask
+        )
+      ),
+
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail(
+              "Expected a 'CmdResponse' object, but got a CLI exit function"
+            )
+          ),
+
+        ({
+            errors,
+            warnings,
+            testOutput: configGroupDirPaths,
+            nestedConfigGroupHasValidDefaultDestinationRecordFile,
+          }) =>
+          async () => {
+            expect(errors).toBeEmpty();
+            expect(warnings).toBeEmpty();
+            expect(nestedConfigGroupHasValidDefaultDestinationRecordFile).toBeTrue();
+
+            expect(configGroupDirPaths).toIncludeSameMembers([
+              expectedPathToNestedConfigGroup,
+            ]);
+          }
+      )
+    )();
 
     // Cleanup
     await removeDirs([nameOfMockNestedConfigGroup]);
@@ -130,10 +179,24 @@ describe('Tests for everything but the happy path', () => {
   test('Should ensure that the createConfigGroup command exits gracefully if no arguments are passed', async () => {
     // Arrange
     // Act
-    await createConfigGroupCmd([]);
+    const cmdOutputTE = createConfigGroupCmd([], []);
 
     // Assert
-    expect(process.exit).toHaveBeenCalledWith(ExitCodes.GENERAL);
+    await pipe(
+      cmdOutputTE,
+
+      TE.fold(
+        exitFn => async () => {
+          exitFn();
+          expect(process.exit).toHaveBeenCalledWith(ExitCodes.GENERAL);
+        },
+
+        () => () =>
+          Promise.reject(
+            manualFail('Expected a CLI exit function, but got a CmdResponse object')
+          )
+      )
+    )();
   });
 
   test(`Should ensure that the createConfigGroup command exits with errors if none of the required environment variables (${SHELL_VARS_TO_CONFIG_GRP_DIRS_STR}) are set`, async () => {
@@ -154,16 +217,31 @@ describe('Tests for everything but the happy path', () => {
     );
 
     // Act
-    const {
-      errors,
-      warnings,
-      output: cmdOutput,
-    } = await createConfigGroupCmd(mockConfigGroupNames);
+    const cmdOutputTE = createConfigGroupCmd(
+      toPositionalArgs(mockConfigGroupNames),
+      []
+    );
 
     // Assert
-    expect(errors).toBeArrayOfSize(mockConfigGroupNames.length);
-    expect(warnings).toBeEmpty();
-    expect(cmdOutput).toBeEmpty();
+    await pipe(
+      cmdOutputTE,
+
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail(
+              "Expected a 'CmdResponse' object, but got a CLI exit function"
+            )
+          ),
+
+        ({ errors, warnings, output: cmdResponse }) =>
+          async () => {
+            expect(errors).toBeArrayOfSize(mockConfigGroupNames.length);
+            expect(warnings).toBeEmpty();
+            expect(cmdResponse).toBeEmpty();
+          }
+      )
+    )();
 
     // Cleanup
     process.env.DOTS = MOCK_DOTS_DIR;

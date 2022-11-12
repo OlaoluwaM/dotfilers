@@ -1,6 +1,7 @@
 import { pipe } from 'fp-ts/lib/function';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { default as ora, Options } from 'ora';
 
 export const ALL_FILES_CHAR = 'all';
 
@@ -27,6 +28,12 @@ export function getAbsolutePathsForFile(fileUrl: string) {
 }
 
 export const { __dirname } = getAbsolutePathsForFile(import.meta.url);
+
+const spinnerOptions: Options = {
+  spinner: 'dots',
+};
+
+export const spinner = ora(spinnerOptions);
 
 export enum ExitCodes {
   OK = 0,

@@ -3,18 +3,34 @@
 import * as A from 'fp-ts/lib/Array';
 import * as S from 'fp-ts/lib/string';
 import * as T from 'fp-ts/lib/Task';
+import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
+import prompts from 'prompts';
 
 import { compose } from 'ramda';
 import { flow, pipe } from 'fp-ts/lib/function';
-import { default as linkCmd } from '@cmds/link';
-import { default as unlinkCmd } from '@cmds/unlink';
+import { default as _linkCmd } from '@cmds/link';
 import { TEST_DATA_DIR_PREFIX } from './setup';
+import { default as _unlinkCmd } from '@cmds/unlink';
 import { createDirIfItDoesNotExist } from '@utils/index';
 import { expandShellVariablesInString } from '@lib/shellVarStrExpander';
-import { ALL_FILES_CHAR, CONFIG_GRP_DEST_RECORD_FILE_NAME } from '../src/constants';
+import { CmdDataOutput as LinkCmdDataOutput } from './link.test';
 import {
+  ExitCodes,
+  ALL_FILES_CHAR,
+  CONFIG_GRP_DEST_RECORD_FILE_NAME,
+} from '../src/constants';
+import {
+  toCmdOptions,
+  DestinationPath,
+  toPositionalArgs,
+  CurriedReturnType,
+  CmdResponseWithTestOutput,
+} from '@types';
+import {
+  ExcludeFn,
+  ExtractFn,
   createFile,
   generatePath,
   checkIfAllPathsAreValid,
@@ -22,6 +38,15 @@ import {
   getDestinationPathsOfIgnoredFiles,
   getAllDestinationPathsFromConfigGroups,
 } from './helpers';
+
+// TODO: Implement tests using TaskEither Interface instead
+const linkCmd = flow(_linkCmd, TE.toUnion);
+const unlinkCmd = flow(_unlinkCmd, TE.toUnion);
+
+type CmdOutput = Awaited<CurriedReturnType<typeof unlinkCmd>>;
+
+type CmdDataOutput = ExcludeFn<CmdOutput>;
+type ProcessExitFn = ExtractFn<CmdOutput>;
 
 const UNLINK_TEST_DATA_DIR = `${TEST_DATA_DIR_PREFIX}/unlink`;
 const UNLINK_TEST_ASSERT_DIR = `${UNLINK_TEST_DATA_DIR}/mock-home`;
@@ -38,7 +63,10 @@ beforeAll(() => {
 const createConfigGroupFile = createFile(MOCK_DOTS_DIR);
 const generateConfigGroupStructurePath = generatePath(MOCK_DOTS_DIR);
 
-const VALID_MOCK_CONFIG_GRP_NAMES = ['git', 'bat', 'neovim', 'npm'];
+const VALID_MOCK_CONFIG_GRP_NAMES = pipe(
+  ['git', 'bat', 'neovim', 'npm'],
+  toPositionalArgs
+);
 
 describe('Tests for the happy path', () => {
   test.each([
@@ -49,12 +77,16 @@ describe('Tests for the happy path', () => {
     'Should ensure that the unlink command can delete %s config files from their destination paths',
     async (_, mockLinkCmdCliOptions) => {
       // Arrange
-      await linkCmd(VALID_MOCK_CONFIG_GRP_NAMES, mockLinkCmdCliOptions);
+      await linkCmd(
+        VALID_MOCK_CONFIG_GRP_NAMES,
+        toCmdOptions(mockLinkCmdCliOptions)
+      )();
 
       // Act
-      const { errors, forTest: operatedOnDestinationPaths } = await unlinkCmd(
-        VALID_MOCK_CONFIG_GRP_NAMES
-      );
+      const cmdOutput = await unlinkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [])();
+
+      const { errors, testOutput: operatedOnDestinationPaths } =
+        cmdOutput as CmdDataOutput;
 
       const areAllDestinationFilesPresentAtTheirDestinationPaths =
         await checkIfAllPathsAreValid(operatedOnDestinationPaths)();
@@ -71,24 +103,24 @@ describe('Tests for the happy path', () => {
     ['hardlinks', ['-H', '--hardlink']],
   ])(
     'Should ensure that the unlink command defaults to removing %s of all config files in all config groups if none are explicitly specified',
-    async (_, mockOptions) => {
+    async (_, mockLinkCmdCliOptions) => {
       // Arrange
       process.env.DOTS = `${UNLINK_TEST_DATA_DIR}/valid-mock-dots`;
       process.env.DOTFILES = `${UNLINK_TEST_DATA_DIR}/valid-mock-dots`;
 
-      const { forTest: configGroups } = await linkCmd(
+      const { testOutput: configGroups } = (await linkCmd(
         [],
-        mockOptions.concat(['-y'])
-      );
+        toCmdOptions(mockLinkCmdCliOptions.concat(['-y']))
+      )()) as LinkCmdDataOutput;
 
       const linkCmdDestinationPaths =
         getAllDestinationPathsFromConfigGroups(configGroups);
 
       // Act
-      const { errors, forTest: operatedOnDestinationPaths } = await unlinkCmd(
-        [],
-        ['--yes']
-      );
+      const cmdOutput = await unlinkCmd([], toCmdOptions(['--yes']))();
+
+      const { errors, testOutput: operatedOnDestinationPaths } =
+        cmdOutput as CmdDataOutput;
 
       const areAllDestinationFilesPresentAtTheirDestinationPaths =
         await checkIfAllPathsAreValid(operatedOnDestinationPaths)();
@@ -115,20 +147,22 @@ describe('Tests for the happy path', () => {
     'Should ensure that the unlink command can delete %s config files from config groups even when some files are being ignored',
     async (_, mockLinkCmdCliOptions) => {
       // Arrange
-      const mockConfigGroupNames = VALID_MOCK_CONFIG_GRP_NAMES.concat([
-        'withAllIgnored',
-        'withSomeIgnored',
-      ]);
-
-      const { forTest: configGroups } = await linkCmd(
-        mockConfigGroupNames,
-        mockLinkCmdCliOptions
+      const mockConfigGroupNames = pipe(
+        ['withAllIgnored', 'withSomeIgnored'],
+        A.concat(VALID_MOCK_CONFIG_GRP_NAMES),
+        toPositionalArgs
       );
+
+      const { testOutput: configGroups } = (await linkCmd(
+        mockConfigGroupNames,
+        toCmdOptions(mockLinkCmdCliOptions)
+      )()) as LinkCmdDataOutput;
 
       // Act
-      const { errors, forTest: operatedOnDestinationPaths } = await unlinkCmd(
-        mockConfigGroupNames
-      );
+      const cmdOutput = await unlinkCmd(mockConfigGroupNames, [])();
+
+      const { errors, testOutput: operatedOnDestinationPaths } =
+        cmdOutput as CmdDataOutput;
 
       const destinationPathsOfIgnoredFilesOnly =
         getDestinationPathsOfIgnoredFiles(configGroups);
@@ -204,14 +238,21 @@ describe('Tests for the happy path', () => {
     await mockNestedConfigGroupDestinationRecordCreationTask();
     await mockTopLevelConfigGroupDestinationRecordCreationTask();
 
-    const configGroupNames = [`${mockConfigGroupName}/${nestedConfigGroupName}`];
+    const configGroupNames = pipe(
+      [`${mockConfigGroupName}/${nestedConfigGroupName}`],
+      toPositionalArgs
+    );
 
-    const { forTest: configGroups } = await linkCmd(configGroupNames);
+    const { testOutput: configGroups } = (await linkCmd(
+      configGroupNames,
+      []
+    )()) as LinkCmdDataOutput;
 
     // Act
-    const { errors, forTest: operatedOnDestinationPaths } = await unlinkCmd(
-      configGroupNames
-    );
+    const cmdOutput = await unlinkCmd(configGroupNames, [])();
+
+    const { errors, testOutput: operatedOnDestinationPaths } =
+      cmdOutput as CmdResponseWithTestOutput<DestinationPath[]>;
 
     const nestedConfigGroupDestinationPaths =
       getAllDestinationPathsFromConfigGroups(configGroups);
@@ -295,10 +336,14 @@ describe('Tests for the happy path', () => {
     await mockConfigGroupFilesCreationTask();
     await mockConfigGroupDestinationRecordCreationTask();
 
-    const { forTest: configGroups } = await linkCmd([mockConfigGroupName]);
+    const { testOutput: configGroups } = (await linkCmd(
+      toPositionalArgs([mockConfigGroupName]),
+      []
+    )()) as LinkCmdDataOutput;
 
     // Act
-    const { errors } = await unlinkCmd([mockConfigGroupName]);
+    const cmdOutput = await unlinkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+    const { errors } = cmdOutput as CmdDataOutput;
 
     const allFileNamesInConfigGroups = getFileNamesFromConfigGroups(configGroups);
 
@@ -315,21 +360,26 @@ describe('Tests for the happy path', () => {
 });
 
 describe('Tests for everything but the happy path', () => {
-  const INVALID_MOCK_CONFIG_GRP_NAMES = ['fly-pie', 'mcfly', 'nvm', 'cava'];
+  const INVALID_MOCK_CONFIG_GRP_NAMES = pipe(
+    ['fly-pie', 'mcfly', 'nvm', 'cava'],
+    toPositionalArgs
+  );
 
   test('Should ensure that the unlink command can handle cases where the specified config groups do not exist', async () => {
     // Arrange
-    await linkCmd(INVALID_MOCK_CONFIG_GRP_NAMES);
+    await linkCmd(INVALID_MOCK_CONFIG_GRP_NAMES, [])();
 
     // Act
+    const cmdOutput = await unlinkCmd(INVALID_MOCK_CONFIG_GRP_NAMES, [])();
+
     const {
       errors,
-      output: cmdOutput,
-      forTest: operatedOnDestinationPaths,
-    } = await unlinkCmd(INVALID_MOCK_CONFIG_GRP_NAMES);
+      output: cmdResponse,
+      testOutput: operatedOnDestinationPaths,
+    } = cmdOutput as CmdDataOutput;
 
     // Assert
-    expect(cmdOutput).toBeEmpty();
+    expect(cmdResponse).toBeEmpty();
     expect(operatedOnDestinationPaths).toBeEmpty();
 
     expect(errors.length).toBeGreaterThanOrEqual(
@@ -340,12 +390,26 @@ describe('Tests for everything but the happy path', () => {
   test('Should ensure that the unlink command can handle where cases the specified config groups have not been operated on by the link command', async () => {
     // Arrange
     // Act
-    const { errors, output: cmdOutput } = await unlinkCmd(
-      VALID_MOCK_CONFIG_GRP_NAMES
-    );
+    const cmdOutput = await unlinkCmd(VALID_MOCK_CONFIG_GRP_NAMES, [])();
+
+    const { errors, output: cmdResponse } = cmdOutput as CmdResponseWithTestOutput<
+      DestinationPath[]
+    >;
 
     // Assert
-    expect(cmdOutput).toBeEmpty();
     expect(errors.length).toBeGreaterThanOrEqual(VALID_MOCK_CONFIG_GRP_NAMES.length);
+    expect(cmdResponse).toBeEmpty();
+  });
+
+  test('Should ensure that the unlink command exits gracefully should we decline to operate on all config groups', async () => {
+    // Arrange
+    prompts.inject([false]);
+
+    // Act
+    const cmdOutput = (await unlinkCmd([], [])()) as ProcessExitFn;
+    cmdOutput();
+
+    // Assert
+    expect(process.exit).toHaveBeenCalledWith(ExitCodes.OK);
   });
 });

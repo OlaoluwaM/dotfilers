@@ -1,6 +1,9 @@
+import * as L from 'monocle-ts/lib/Lens';
+
 import { not } from 'fp-ts/lib/Predicate';
+import { pipe } from 'fp-ts/lib/function';
+import { join, uniq } from 'ramda';
 import { isString, isEmpty } from 'fp-ts/lib/string';
-import { join, lensProp, uniq, view } from 'ramda';
 
 export class AggregateError extends Error {
   messages: string[] = [];
@@ -36,6 +39,6 @@ export function addError(message: string | string[]) {
 }
 
 export function getErrorMessagesFromAggregateErr(aggregateErrorObj: AggregateError) {
-  const filesLens = lensProp<AggregateError, 'messages'>('messages');
-  return view(filesLens, aggregateErrorObj);
+  const MessagesLens = pipe(L.id<AggregateError>(), L.prop('messages'));
+  return pipe(aggregateErrorObj, MessagesLens.get);
 }

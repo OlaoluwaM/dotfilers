@@ -1,15 +1,16 @@
 import * as A from 'fp-ts/lib/Array';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
-import * as TE from 'fp-ts/lib/TaskEither';
 import * as RC from 'fp-ts/lib/Record';
+import * as IO from 'fp-ts/lib/IO';
+import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
 
-import { pipe } from 'fp-ts/lib/function';
 import { match, P } from 'ts-pattern';
-import { ExitCodes } from '../constants';
 import { newAggregateError } from '@utils/AggregateError';
+import { ExitCodes, spinner } from '../constants';
+import { constTrue, flow, pipe } from 'fp-ts/lib/function';
 import { optionConfigConstructor } from '@lib/arg-parser';
 import {
   isNotIgnored,
@@ -17,6 +18,8 @@ import {
   default as createConfigGroups,
 } from '@app/configGroup';
 import {
+  bind,
+  arrayToList,
   normalizedCopy,
   deleteThenSymlink,
   deleteThenHardlink,
@@ -24,49 +27,66 @@ import {
 } from '@utils/index';
 import {
   exitCli,
+  getParsedOptions,
   exitCliWithCodeOnly,
   linkOperationTypeToPastTense,
   getPathsToAllConfigGroupDirsInExistence,
-  getParsedOptions,
+  getPathsToAllConfigGroupDirsInExistenceInteractively,
 } from '@app/helpers';
 import {
   File,
   SourcePath,
-  CmdResponse,
+  CmdOptions,
   ConfigGroup,
+  PositionalArgs,
   DestinationPath,
+  CurriedReturnType,
+  CmdFnWithTestOutput,
   LinkCmdOperationType,
+  CmdResponseWithTestOutput,
 } from '@types';
 
 interface ParsedCmdOptions {
   readonly hardlink: boolean;
   readonly copy: boolean;
   readonly yes: boolean;
+  readonly interactive: boolean;
 }
 
-export default async function main(
-  cmdArguments: string[],
-  cmdOptions: string[] = []
-) {
-  const parsedCmdOptions: ParsedCmdOptions = parseCmdOptions(cmdOptions);
-
-  const configGroupNamesOrDirPaths = A.isEmpty(cmdArguments)
-    ? await getPathsToAllConfigGroupDirsInExistence(parsedCmdOptions.yes)
-    : cmdArguments;
-
-  const cmdOutput = await match(configGroupNamesOrDirPaths)
-    .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
-    .with({ _tag: 'Left' }, (_, { left }) =>
-      exitCli(left.message, ExitCodes.GENERAL)
-    )
-    .with({ _tag: 'Right' }, (_, { right }) => linkCmd(right, parsedCmdOptions))
-    .with(P.array(P.string), (_, value) => linkCmd(value, parsedCmdOptions))
-    .exhaustive();
-
-  return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
+// TODO: Find Better Name for this interface and corresponding parameters
+interface LinkCmdParameter {
+  readonly parsedLinkCmdOptions: ParsedCmdOptions;
+  readonly configGroupNamesOrDirPaths: string[];
 }
 
-function parseCmdOptions(cmdOptions: string[]): ParsedCmdOptions {
+export default function main(
+  cmdArguments: PositionalArgs,
+  cmdOptions: CmdOptions
+): ReturnType<CmdFnWithTestOutput<ConfigGroup[]>> {
+  return pipe(
+    TE.Do,
+    TE.let('parsedLinkCmdOptions', () => parseCmdOptions(cmdOptions)),
+
+    TE.bind('configGroupNamesOrDirPaths', ({ parsedLinkCmdOptions }) =>
+      A.isEmpty(cmdArguments)
+        ? promptForConfigGroupsBasedOnCmdOptions(parsedLinkCmdOptions)
+        : TE.right(cmdArguments)
+    ),
+
+    TE.mapLeft(aggregateCmdErrors),
+
+    TE.chainFirstIOK(({ configGroupNamesOrDirPaths }) =>
+      initiateSpinner(configGroupNamesOrDirPaths)
+    ),
+
+    TE.chainW(flow(linkCmd, TE.rightTask)),
+
+    TE.chainFirstIOK(() => stopSpinnerOnSuccess),
+    TE.mapLeft(flow(IO.chainFirst(() => stopSpinnerOnError)))
+  );
+}
+
+function parseCmdOptions(cmdOptions: CmdOptions): ParsedCmdOptions {
   return pipe(
     cmdOptions,
     pipe(generateOptionConfig(), getParsedOptions),
@@ -78,51 +98,117 @@ function generateOptionConfig() {
   return {
     options: {
       hardlink: optionConfigConstructor({
-        parser: () => true,
+        parser: constTrue,
         isFlag: true,
         aliases: ['H'],
       }),
 
       copy: optionConfigConstructor({
-        parser: () => true,
+        parser: constTrue,
         isFlag: true,
         aliases: ['c'],
       }),
 
       yes: optionConfigConstructor({
-        parser: () => true,
+        parser: constTrue,
         isFlag: true,
         aliases: ['y'],
+      }),
+
+      interactive: optionConfigConstructor({
+        parser: constTrue,
+        isFlag: true,
+        aliases: ['i'],
       }),
     },
   };
 }
 
-async function linkCmd(
-  configGroupNamesOrDirPaths: string[],
-  parsedCmdOptions: ParsedCmdOptions
-): Promise<CmdResponse<ConfigGroup[]>> {
+function promptForConfigGroupsBasedOnCmdOptions(cmdOptions: ParsedCmdOptions) {
+  const { yes, interactive } = cmdOptions;
+  const relevantOptionCombinations: [boolean, boolean] = [yes, interactive];
+
+  return match(relevantOptionCombinations)
+    .with(P.union([true, false], [false, false]), () =>
+      getPathsToAllConfigGroupDirsInExistence(yes)
+    )
+    .with(
+      P.union([true, true], [false, true]),
+      getPathsToAllConfigGroupDirsInExistenceInteractively()
+    )
+    .exhaustive();
+}
+
+function aggregateCmdErrors(errors: ExitCodes.OK | Error) {
+  return match(errors)
+    .with(ExitCodes.OK as 0, exitCliWithCodeOnly)
+    .with(P.instanceOf(Error), (_, err) => exitCli(err.message, ExitCodes.GENERAL))
+    .exhaustive();
+}
+
+function initiateSpinner(configGroupNamesOrDirPaths: string[]) {
+  const configGroupsNames = pipe(configGroupNamesOrDirPaths, A.map(path.basename));
+
+  return () =>
+    spinner.start(
+      `Linking files from the following config groups: ${arrayToList(
+        configGroupsNames
+      )}...`
+    );
+}
+
+interface LinkOperationResponse {
+  readonly configGroupCreationResults: Awaited<
+    CurriedReturnType<typeof createConfigGroups>
+  >;
+
+  readonly linkOperationResults: Awaited<
+    CurriedReturnType<typeof performChosenLinkCmdOperation>
+  >;
+}
+
+function linkCmd({
+  parsedLinkCmdOptions,
+  configGroupNamesOrDirPaths,
+}: LinkCmdParameter) {
   const chosenLinkCmdOperationFn = pipe(
-    parsedCmdOptions,
+    parsedLinkCmdOptions,
     determineLinkCmdOperationToPerform,
     performChosenLinkCmdOperation
   );
 
-  const configGroupsWithErrors = await createConfigGroups(
-    configGroupNamesOrDirPaths
-  )();
+  return pipe(
+    T.Do,
+    T.bind(
+      'configGroupCreationResults',
+      bind(createConfigGroups)(configGroupNamesOrDirPaths)
+    ),
+
+    T.bind(
+      'linkOperationResults',
+      ({ configGroupCreationResults: { right: configGroups } }) =>
+        chosenLinkCmdOperationFn(configGroups)
+    ),
+
+    T.map(generateCmdResponse)
+  );
+}
+
+function generateCmdResponse(
+  linkOperationResponse: LinkOperationResponse
+): CmdResponseWithTestOutput<ConfigGroup[]> {
+  const { configGroupCreationResults, linkOperationResults } = linkOperationResponse;
 
   const { left: configGroupCreationErrs, right: configGroups } =
-    configGroupsWithErrors;
+    configGroupCreationResults;
 
-  const operationFeedback = await chosenLinkCmdOperationFn(configGroups)();
-  const { left: operationErrors, right: operationOutput } = operationFeedback;
+  const { left: operationErrors, right: operationOutput } = linkOperationResults;
 
   return {
     errors: [...configGroupCreationErrs, ...operationErrors],
     output: operationOutput,
-    forTest: configGroups,
-    warnings: []
+    testOutput: configGroups,
+    warnings: [],
   };
 }
 
@@ -166,26 +252,15 @@ function performChosenLinkCmdOperation(
 }
 
 function createChosenLinkOperationFn(linkOperationType: LinkCmdOperationType) {
+  const performLinkOperation = matchDesiredLinkOperation(linkOperationType);
+
   return (pathToSourceEntity: SourcePath, destinationPath: DestinationPath) =>
     TE.tryCatch(
       async () => {
         await pipe(
-          createDirIfItDoesNotExist(path.dirname(destinationPath)),
-
-          T.chain(
-            () => () =>
-              match(linkOperationType)
-                .with('copy', () =>
-                  normalizedCopy(pathToSourceEntity, destinationPath)
-                )
-                .with('hardlink', () =>
-                  deleteThenHardlink(pathToSourceEntity, destinationPath)
-                )
-                .with('symlink', () =>
-                  deleteThenSymlink(pathToSourceEntity, destinationPath)
-                )
-                .exhaustive()
-          )
+          path.dirname(destinationPath),
+          createDirIfItDoesNotExist,
+          T.chain(() => performLinkOperation(pathToSourceEntity, destinationPath))
         )();
 
         const fileName = path.basename(pathToSourceEntity);
@@ -200,4 +275,29 @@ function createChosenLinkOperationFn(linkOperationType: LinkCmdOperationType) {
         return newAggregateError(errorMsg);
       }
     );
+}
+
+function matchDesiredLinkOperation(linkOperationType: LinkCmdOperationType) {
+  return (
+      pathToSourceEntity: SourcePath,
+      destinationPath: DestinationPath
+    ): T.Task<void> =>
+    () =>
+      match(linkOperationType)
+        .with('copy', () => normalizedCopy(pathToSourceEntity, destinationPath))
+        .with('hardlink', () =>
+          deleteThenHardlink(pathToSourceEntity, destinationPath)
+        )
+        .with('symlink', () =>
+          deleteThenSymlink(pathToSourceEntity, destinationPath)
+        )
+        .exhaustive();
+}
+
+function stopSpinnerOnSuccess() {
+  return spinner.succeed('Linking complete!');
+}
+
+function stopSpinnerOnError() {
+  return spinner.succeed('Linking failed. Exiting...');
 }

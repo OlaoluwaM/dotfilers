@@ -1,8 +1,8 @@
 import * as A from 'fp-ts/lib/Array';
-import * as L from 'monocle-ts/Lens';
+import * as L from 'monocle-ts/lib/Lens';
 import * as O from 'fp-ts/lib/Option';
 import * as RC from 'fp-ts/lib/Record';
-import * as MO from 'monocle-ts/Optional';
+import * as MO from 'monocle-ts/lib/Optional';
 import * as NEA from 'fp-ts/lib/NonEmptyArray';
 
 import parseCliArgs from './parser';

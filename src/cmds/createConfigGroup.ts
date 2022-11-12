@@ -1,56 +1,97 @@
 import * as A from 'fp-ts/lib/Array';
 import * as E from 'fp-ts/lib/Either';
+import * as S from 'fp-ts/lib/Separated';
 import * as T from 'fp-ts/lib/Task';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import path from 'path';
+import chalk from 'chalk';
 
-import { chalk } from 'zx/.';
 import { exitCli } from '@app/helpers';
 import { match, P } from 'ts-pattern';
 import { writeFile } from 'fs/promises';
 import { pipe, flow } from 'fp-ts/lib/function';
-import { CmdResponse } from '@types';
 import { newAggregateError } from '@utils/AggregateError';
-import { createDirIfItDoesNotExist, doesPathExist } from '@utils/index';
 import { CONFIG_GRP_DEST_RECORD_FILE_NAME, ExitCodes } from '../constants';
+import { bind, createDirIfItDoesNotExist, doesPathExist } from '@utils/index';
 import {
   DEFAULT_DEST_RECORD_FILE_CONTENTS,
   generateAbsolutePathToConfigGroupDir,
 } from '@app/configGroup';
+import {
+  CmdOptions,
+  PositionalArgs,
+  CmdFnWithTestOutput,
+  CmdResponseWithTestOutput,
+} from '@types';
 
-export default async function main(
-  configGroupNames: string[] | [],
-  _: string[] = []
-) {
-  const fatalErrMsg = chalk.red.bold(
-    'No config group names were specified. Exiting...'
-  );
-
-  const cmdOutput = await match(configGroupNames)
-    .with([], () => exitCli(fatalErrMsg, ExitCodes.GENERAL))
-    .with(P.array(P.string), (__, value) => createConfigGroupDir(value))
+export default function main(
+  cmdArguments: PositionalArgs,
+  _: CmdOptions
+): ReturnType<CmdFnWithTestOutput<string[]>> {
+  return match(cmdArguments)
+    .with([], () => TE.left(exitCli(generateCmdFatalErrMsg(), ExitCodes.GENERAL)))
+    .with(P.array(P.string), (__, value) =>
+      pipe(createConfigGroupDir(value), TE.rightTask)
+    )
     .exhaustive();
-
-  return typeof cmdOutput === 'function' ? cmdOutput() : cmdOutput;
 }
 
-async function createConfigGroupDir(
-  configGroupNames: string[]
-): Promise<CmdResponse<string[]>> {
-  const { left: pathGenerationErrors, right: allAbsPathsToPotentialConfigGroups } =
-    generatePathsToPotentialConfigGroupDirs(configGroupNames);
+function generateCmdFatalErrMsg() {
+  return chalk.red.bold('No config group names were specified. Exiting...');
+}
 
-  const { left: warningsForExistingGroups, right: groupCreationOutput } = await pipe(
-    allAbsPathsToPotentialConfigGroups,
-    A.wilt(T.ApplicativePar)(generateConfigGroupDirForNonExistingOnes)
-  )();
+interface ConfigGroupDirCreationResponse {
+  readonly configGroupPathGenerationResult: ReturnType<
+    typeof generatePathsToPotentialConfigGroupDirs
+  >;
+
+  readonly configGroupDirCreationResult: S.Separated<string[], string[]>;
+}
+
+function createConfigGroupDir(configGroupNames: string[]) {
+  return pipe(
+    T.Do,
+
+    T.let(
+      'configGroupPathGenerationResult',
+      bind(generatePathsToPotentialConfigGroupDirs)(configGroupNames)
+    ),
+
+    T.bind(
+      'configGroupDirCreationResult',
+      ({
+        configGroupPathGenerationResult: {
+          right: allAbsPathsToPotentialConfigGroups,
+        },
+      }) =>
+        pipe(
+          allAbsPathsToPotentialConfigGroups,
+          A.wilt(T.ApplicativePar)(generateConfigGroupDirForNonExistingOnes)
+        )
+    ),
+
+    T.map(generateCmdResponse)
+  );
+}
+
+function generateCmdResponse(
+  configGroupDirCreationResponse: ConfigGroupDirCreationResponse
+): CmdResponseWithTestOutput<string[]> {
+  const { configGroupDirCreationResult, configGroupPathGenerationResult } =
+    configGroupDirCreationResponse;
+
+  const { left: pathGenerationErrors, right: allAbsPathsToPotentialConfigGroups } =
+    configGroupPathGenerationResult;
+
+  const { left: warningsForExistingGroups, right: groupCreationOutput } =
+    configGroupDirCreationResult;
 
   return {
     errors: pathGenerationErrors,
     warnings: warningsForExistingGroups,
     output: groupCreationOutput,
-    forTest: allAbsPathsToPotentialConfigGroups,
+    testOutput: allAbsPathsToPotentialConfigGroups,
   };
 }
 
@@ -83,7 +124,7 @@ function generateConfigGroupDirForNonExistingOnes(absPath: string) {
     TE.chainW(flow(() => absPath, createDirIfItDoesNotExist, TE.fromTask)),
     TE.chainFirstTaskK(() => createDefaultDestinationRecordFile(absPath)),
     TE.map(() => `${path.basename(absPath)} config group created (${absPath})`)
-  ) as TE.TaskEither<string, string>;
+  );
 }
 
 function createDefaultDestinationRecordFile(configGroupDirPath: string) {
