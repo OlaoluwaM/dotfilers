@@ -259,7 +259,7 @@ export function arrayToList(arr: string[]): string {
 
     default: {
       const [elemOne, elemTwo, elemThree, ...rest] = arrCopy;
-      return `${elemOne}, ${elemTwo}, ${elemThree}, and ${rest.length} others`;
+      return `${elemOne}, ${elemTwo}, ${elemThree}, and ${rest.length} other(s)`;
     }
   }
 }
@@ -297,7 +297,9 @@ function allElementsAreEqual<T>(arr: T[]): boolean {
   );
 }
 
-export function removeLeadingPathSeparator(strWithLeadingPathSeparator: string): string {
+export function removeLeadingPathSeparator(
+  strWithLeadingPathSeparator: string
+): string {
   const LEADING_PATH_SEPARATOR_REGEX = /^\/+/;
 
   return pipe(
