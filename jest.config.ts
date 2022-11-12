@@ -24,7 +24,7 @@ const config: JestConfigWithTsJest = {
   testTimeout: 10000,
   testEnvironment: 'node',
   verbose: true,
-  notify: true,
+  notify: !isCI,
   testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)'],
   collectCoverageFrom,
   testPathIgnorePatterns,
