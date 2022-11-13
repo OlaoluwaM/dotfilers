@@ -24,12 +24,10 @@ module.exports = {
       },
     ],
     '@semantic-release/npm',
-    '@semantic-release/github',
     [
-      '@semantic-release/git',
+      '@semantic-release/github',
       {
-        assets: ['CHANGELOG.md', 'dist/**'],
-        message: `feat(release): Release <%= nextRelease.version %> - <%= new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' }) %> [skip ci]\n\n<%= nextRelease.notes %>`,
+        assets: [{ path: 'bin/build.cjs', label: 'Standalone JS executable' }],
       },
     ],
   ],
