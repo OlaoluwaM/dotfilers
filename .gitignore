@@ -131,3 +131,4 @@ dist
 
 # custom
 bin
+tests/test-data

@@ -46,7 +46,7 @@ module.exports = {
     ],
 
     'no-unused-vars': 'off',
-    '@typescript-eslint/no-unused-vars': ['warn'],
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
 
     'import/prefer-default-export': 0,
 
@@ -72,7 +72,16 @@ module.exports = {
 
     'import/no-extraneous-dependencies': [
       'error',
-      { devDependencies: ['test/**/*.test.ts', 'src/lib/**/test.ts', 'jest.config.ts'] },
+      {
+        devDependencies: [
+          'test/**/*.ts',
+          'tests/**/*.ts',
+          'src/lib/**/test.ts',
+          'jest.config.ts',
+        ],
+      },
     ],
+
+    'no-return-await': 'off',
   },
 };

@@ -1,33 +1,7 @@
 {
-  "node-ts-esm": {
-    "devDepNames": [
-      "@commitlint/cli",
-      "@commitlint/config-conventional",
-      "@types/node",
-      "typescript",
-      "ts-jest",
-      "eslint",
-      "eslint-config-airbnb-base",
-      "eslint-config-prettier",
-      "eslint-import-resolver-typescript",
-      "eslint-plugin-import",
-      "eslint-plugin-jest",
-      "jest",
-      "@types/jest",
-      "prettier",
-      "ts-node",
-      "@types/eslint-config-prettier",
-      "@typescript-eslint/eslint-plugin",
-      "@typescript-eslint/parser"
-    ],
-    "remoteConfigurationUrls": [
-      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/node/.eslintrc.cjs",
-      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/common/.eslintignore",
-      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/common/.prettierrc",
-      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/common/.prettierignore",
-      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/node/jest.config.cjs",
-      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/node/commitlint.config.cjs"
-    ]
+  "node-fp": {
+    "depNames": ["ramda", "fp-ts"],
+    "devDepNames": ["@types/ramda"]
   },
 
   "node-ts": {
@@ -44,8 +18,10 @@
       "eslint-plugin-import",
       "eslint-plugin-jest",
       "jest",
+      "@jest/globals",
       "@types/jest",
       "prettier",
+      "ts-node",
       "@types/eslint-config-prettier",
       "@typescript-eslint/eslint-plugin",
       "@typescript-eslint/parser"
@@ -57,6 +33,21 @@
       "https://raw.githubusercontent.com/OlaoluwaM/configs/main/common/.prettierignore",
       "https://raw.githubusercontent.com/OlaoluwaM/configs/main/node/jest.config.js",
       "https://raw.githubusercontent.com/OlaoluwaM/configs/main/node/commitlint.config.js"
+    ]
+  },
+
+  "node-ts-esm": {
+    "extends": {
+      "from": "node-ts",
+      "merge": ["devDepNames"]
+    },
+    "remoteConfigurationUrls": [
+      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/node/.eslintrc.cjs",
+      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/common/.eslintignore",
+      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/common/.prettierrc",
+      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/common/.prettierignore",
+      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/node/jest.config.cjs",
+      "https://raw.githubusercontent.com/OlaoluwaM/configs/main/node/commitlint.config.cjs"
     ]
   }
 }
