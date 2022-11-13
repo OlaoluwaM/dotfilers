@@ -4,8 +4,8 @@ import * as TE from 'fp-ts/lib/TaskEither';
 import path from 'path';
 import fsExtra from 'fs-extra';
 
-import { pipe } from 'fp-ts/lib/function';
-import { __dirname } from '../constants';
+import { _dirname } from '../constants';
+import { flow, pipe } from 'fp-ts/lib/function';
 import { PositionalArgs, CmdOptions, CmdFnWithTestOutput } from '@types';
 
 export default function main(
@@ -30,8 +30,8 @@ interface PackageJson {
 
 function getCliVersion() {
   return pipe(
-    __dirname,
-    (dirname: string) => path.join(dirname, 'package.json'),
+    _dirname,
+    flow(path.dirname, (dirname: string) => path.join(dirname, 'package.json')),
     IO.of,
     IO.map<string, PackageJson>(fsExtra.readJSONSync),
     IO.map(({ version }) => version)
