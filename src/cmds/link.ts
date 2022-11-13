@@ -24,6 +24,7 @@ import {
   deleteThenSymlink,
   deleteThenHardlink,
   createDirIfItDoesNotExist,
+  indentText,
 } from '@utils/index';
 import {
   exitCli,
@@ -149,12 +150,18 @@ function aggregateCmdErrors(errors: ExitCodes.OK | Error) {
 function initiateSpinner(configGroupNamesOrDirPaths: string[]) {
   const configGroupsNames = pipe(configGroupNamesOrDirPaths, A.map(path.basename));
 
-  return () =>
-    spinner.start(
+  return () => {
+    // For a prettier output
+    console.log('\n');
+
+    return pipe(
       `Linking files from the following config groups: ${arrayToList(
         configGroupsNames
-      )}...`
+      )}...`,
+      indentText(),
+      spinner.start.bind(spinner)
     );
+  };
 }
 
 interface LinkOperationResponse {
@@ -295,9 +302,13 @@ function matchDesiredLinkOperation(linkOperationType: LinkCmdOperationType) {
 }
 
 function stopSpinnerOnSuccess() {
-  return spinner.succeed('Linking complete!');
+  return pipe('Linking complete!', indentText(), spinner.succeed.bind(spinner));
 }
 
 function stopSpinnerOnError() {
-  return spinner.succeed('Linking failed. Exiting...');
+  return pipe(
+    'Linking failed. Exiting...',
+    indentText(),
+    spinner.fail.bind(spinner)
+  );
 }

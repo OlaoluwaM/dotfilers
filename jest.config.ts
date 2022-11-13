@@ -17,7 +17,10 @@ if (isCI) {
   testPathIgnorePatterns = defaults.testPathIgnorePatterns;
 }
 
-testPathIgnorePatterns = testPathIgnorePatterns.concat(['/tests/test-data/']);
+testPathIgnorePatterns = testPathIgnorePatterns.concat([
+  '/tests/test-data/',
+  'src/lib/minimal-argp',
+]);
 
 const config: JestConfigWithTsJest = {
   preset: 'ts-jest/presets/default-esm',

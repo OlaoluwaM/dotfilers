@@ -12,7 +12,7 @@ import { match, P } from 'ts-pattern';
 import { ExitCodes, spinner } from '../constants';
 import { pipe, flow, constTrue } from 'fp-ts/lib/function';
 import { optionConfigConstructor } from '@lib/arg-parser';
-import { arrayToList, bind, removeEntityAt } from '@utils/index';
+import { arrayToList, bind, indentText, removeEntityAt } from '@utils/index';
 import {
   isNotIgnored,
   getFilesFromConfigGroup,
@@ -119,12 +119,18 @@ function aggregateCmdErrors(errors: ExitCodes.OK | Error) {
 function initiateSpinner(configGroupNamesOrDirPaths: string[]) {
   const configGroupsNames = pipe(configGroupNamesOrDirPaths, A.map(path.basename));
 
-  return () =>
-    spinner.start(
+  return () => {
+    // For a prettier output
+    console.log('\n');
+
+    return pipe(
       `Unlinking files from the following config groups: ${arrayToList(
         configGroupsNames
-      )}...`
+      )}...`,
+      indentText(),
+      spinner.start.bind(spinner)
     );
+  };
 }
 
 interface UnlinkOperationResponse {
@@ -215,11 +221,17 @@ function undoOperationPerformedByLinkCmd(destinationPaths: string[]) {
 }
 
 function stopSpinnerOnSuccess() {
-  return spinner.succeed('Unlinked config group files from their destinations');
+  return pipe(
+    'Unlinked config group files from their destinations',
+    indentText(),
+    spinner.succeed.bind(spinner)
+  );
 }
 
 function stopSpinnerOnError() {
-  return spinner.succeed(
-    'Failed to remove config group files from their destinations. Exiting...'
+  return pipe(
+    'Failed to remove config group files from their destinations. Exiting...',
+    indentText(),
+    spinner.fail.bind(spinner)
   );
 }
