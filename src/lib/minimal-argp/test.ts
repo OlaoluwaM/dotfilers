@@ -1,5 +1,5 @@
 /* global test, expect */
-import ArgParser from './index';
+import { ArgParser } from './index';
 import { ParserOutput } from './src/types';
 
 const mockOptions = {
