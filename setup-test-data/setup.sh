@@ -1,15 +1,32 @@
 #!/usr/bin/env bash
 
 rootDir=$(dirname "$(realpath "$0")")
-DATA_DIR="$(dirname "$rootDir")/tests/mock-env"
+DATA_DIR="$(dirname "$rootDir")/tests/test-data"
 
 test -d "$DATA_DIR" && rm -rf "$DATA_DIR"
 
-echo "Seting up mock-env directory...."
+echo -e "Seting up mock data for tests...\n\n"
+
 mkdir "$DATA_DIR"
 
-echo "Creating mock-dots directory..."
-mkdir -p "$DATA_DIR/mock-dots"
+echo -e "Setting up test-data for the sync command tests...\n"
+source "$rootDir/setup-scripts/sync.test.sh"
+echo -e "Done!\n\n"
 
-echo "Creating mock-home directory..."
-mkdir -p "$DATA_DIR/mock-home"
+echo "Setting up test-data for the link command tests..."
+source "$rootDir/setup-scripts/link.test.sh"
+echo -e "Done!\n\n"
+
+echo "Setting up test-data for the unlink command tests..."
+source "$rootDir/setup-scripts/unlink.test.sh"
+echo -e "Done!\n\n"
+
+echo "Setting up test-data for the learning tests..."
+source "$rootDir/setup-scripts/learning.test.sh"
+echo -e "Done!\n\n"
+
+echo "Setting up test-data for the createConfigGroup command tests..."
+source "$rootDir/setup-scripts/createConfigGroup.test.sh"
+echo -e "Done!\n\n"
+
+echo "Setup Complete :)"

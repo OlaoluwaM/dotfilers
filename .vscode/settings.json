@@ -1,3 +1,25 @@
 {
-  "cSpell.words": ["postbuild", "webcompat"]
+  "cSpell.words": [
+    "argp",
+    "cava",
+    "Dotfilers",
+    "Grps",
+    "hardlink",
+    "hardlinked",
+    "hardlinking",
+    "hardlinks",
+    "mcfly",
+    "navi",
+    "neovim",
+    "ohmyzsh",
+    "postbuild",
+    "readdirp",
+    "RNEA",
+    "simplegit",
+    "spicetify",
+    "tilix",
+    "Vals",
+    "webcompat"
+  ],
+  "jest.autoRun": "off"
 }
