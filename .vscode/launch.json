@@ -12,7 +12,6 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
-      "disableOptimisticBPs": true,
       "runtimeArgs": ["--experimental-vm-modules"],
       "program": "${workspaceFolder}/node_modules/.bin/jest",
       "windows": {
