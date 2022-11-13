@@ -125,6 +125,9 @@ export function getPathsToAllConfigGroupDirsInExistence(overridePrompt: boolean)
 
 function promptForConfirmation(overridePrompt: boolean) {
   return async () => {
+    // For a prettier output
+    console.log('\n');
+
     // We specify `undefined` here because we want to manually clear our overrides
     // On every pass to this function if we do not want the prompt to be overridden
     prompts.override({ answer: overridePrompt || undefined });
@@ -155,13 +158,14 @@ export function getPathsToAllConfigGroupDirsInExistenceInteractively() {
 
     TE.chainW(flow(toInteractivePromptChoices, TE.right)),
     TE.chainTaskK(promptForConfigGroupMultiSelection),
+    TE.map(({ value: selectedDirPaths }) => selectedDirPaths),
     TE.filterOrElseW(A.isNonEmpty, () => ExitCodes.OK as const)
   );
 }
 
 interface ConfigGroupChoice {
   title: string;
-  dirPath: string;
+  value: string;
 }
 
 function toInteractivePromptChoices({
@@ -175,7 +179,7 @@ function toInteractivePromptChoices({
     allConfigGroupDirPaths,
     A.mapWithIndex((ind, configGroupDirPath) => ({
       title: configGroupDirPathsWithoutCommonPrefix[ind],
-      dirPath: configGroupDirPath,
+      value: configGroupDirPath,
     }))
   );
 }
@@ -183,17 +187,21 @@ function toInteractivePromptChoices({
 function promptForConfigGroupMultiSelection(
   configGroupChoices: ConfigGroupChoice[]
 ) {
-  return async () =>
-    (await prompts(
+  return async () => {
+    // For a prettier output
+    console.log('\n');
+
+    return (await prompts(
       {
         type: 'autocompleteMultiselect',
-        name: 'dirPath',
+        name: 'value',
         message: 'Pick the config groups to work on',
         choices: configGroupChoices,
         hint: '- Space to select. Return to submit',
       },
       { onCancel: constant([]) }
-    )) as string[];
+    )) as { value: string[] };
+  };
 }
 
 export function getAllConfigGroupDirPaths(): TE.TaskEither<Error, string[]> {

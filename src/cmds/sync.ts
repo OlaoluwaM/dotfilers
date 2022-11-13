@@ -11,7 +11,7 @@ import { NonEmptyArray } from 'fp-ts/lib/NonEmptyArray';
 import { newAggregateError } from '@utils/AggregateError';
 import { ExitCodes, spinner } from '../constants';
 import { optionConfigConstructor } from '@lib/arg-parser';
-import { doesPathExistSync, execShellCmd } from '../utils/index';
+import { doesPathExistSync, execShellCmd, indentText } from '../utils/index';
 import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
 import {
   CmdOptions,
@@ -59,7 +59,16 @@ export function _main(gitInstance: E.Either<Error, GitInstance>) {
 }
 
 function initiateSpinner() {
-  return () => spinner.start('Syncing dotfiles changes...');
+  return () => {
+    // For a prettier output
+    console.log('\n');
+
+    return pipe(
+      'Syncing dotfiles changes...',
+      indentText(),
+      spinner.start.bind(spinner)
+    );
+  };
 }
 
 // EXPORTED FOR TESTING PURPOSES ONLY
@@ -126,7 +135,6 @@ function syncCmd(git: SimpleGit) {
       TE.fold(
         syncErrorStateMsg => async () =>
           constructSyncCmdErrorResponse(syncErrorStateMsg),
-
         handleSyncSuccessOutput(git)(dotfilesDirPath)(cmdOptions)
       )
     )();
@@ -260,11 +268,11 @@ export function generateDefaultCommitMessage() {
 }
 
 function stopSpinnerOnSuccess() {
-  return spinner.succeed('Sync complete!');
+  return pipe('Sync complete!', indentText(), spinner.succeed.bind(spinner));
 }
 
 function stopSpinnerOnError() {
-  return spinner.succeed('Sync failed. Exiting...');
+  return pipe('Sync failed. Exiting...', indentText(), spinner.fail.bind(spinner));
 }
 
 const main = () => _main(generateGitInstance());

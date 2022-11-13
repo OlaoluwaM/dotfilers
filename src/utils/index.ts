@@ -123,7 +123,7 @@ export function logErrors(errorMsgs: string[]): IO.IO<void> {
       'Errors'
     )}(${chalk[LogColor.ERROR].dim.underline(errorMsgs.length)})`;
 
-    console.warn('\n');
+    console.error('\n');
     console.error(title);
     console.error(errStr);
   };
@@ -302,4 +302,8 @@ export function removeLeadingPathSeparator(
     strWithLeadingPathSeparator,
     S.replace(LEADING_PATH_SEPARATOR_REGEX, '')
   );
+}
+
+export function indentText(indentSize: number = 17) {
+  return (text: string) => text.trim().padStart(indentSize);
 }

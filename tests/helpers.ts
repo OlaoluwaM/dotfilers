@@ -12,6 +12,7 @@ import fsExtra from 'fs-extra';
 import { values } from 'ramda';
 import { MonoidAll } from 'fp-ts/lib/boolean';
 import { concatAll } from 'fp-ts/lib/Monoid';
+import { EXCLUDE_KEY } from '../src/constants';
 import { flow, identity, pipe } from 'fp-ts/lib/function';
 import { lstat, stat, writeFile } from 'fs/promises';
 import { AnyFunction, ConfigGroup, DestinationPath, File, SourcePath } from '@types';
@@ -68,7 +69,7 @@ export const manualFail = (v: any) => {
 };
 
 export const defaultDestRecordEq = Eq.struct({
-  '!': S.Eq,
+  [EXCLUDE_KEY]: S.Eq,
 });
 
 export function createFile(rootPath: string) {
