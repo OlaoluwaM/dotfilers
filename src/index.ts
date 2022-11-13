@@ -180,4 +180,4 @@ function determineExitCode(
   return errors.length > 0 ? ExitCodes.GENERAL : ExitCodes.OK;
 }
 
-await pipe(process.argv, main)();
+pipe(process.argv, main)();

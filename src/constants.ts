@@ -27,7 +27,14 @@ export function getAbsolutePathsForFile(fileUrl: string) {
   }));
 }
 
-export const { __dirname } = getAbsolutePathsForFile(import.meta.url);
+// Courtesy of https://antfu.me/posts/isomorphic-dirname
+// We use `typeof __dirname` instead of `__dirname ??` because we do not want Node to
+// evaluate the meaning of `__dirname` when it is not in a CJS module as doing so will cause Node
+// to error out without actually evaluating the conditional expression
+export const _dirname =
+  typeof __dirname === 'undefined'
+    ? getAbsolutePathsForFile(import.meta.url).__dirname
+    : __dirname;
 
 const spinnerOptions: Options = {
   spinner: 'dots',
