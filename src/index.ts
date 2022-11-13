@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import * as A from 'fp-ts/lib/Array';
 import * as O from 'fp-ts/lib/Option';
 import * as T from 'fp-ts/lib/Task';
 import * as RC from 'fp-ts/lib/Record';
@@ -13,16 +12,20 @@ import versionCmd from '@cmds/version';
 import { match, P } from 'ts-pattern';
 import { ExitCodes } from './constants';
 import { flow, pipe } from 'fp-ts/lib/function';
-import { isOptionLike, optionConfigConstructor } from '@lib/arg-parser';
-import { default as generateCmdHandlerFn, getCliCommand } from '@app/cli';
+import { optionConfigConstructor } from '@lib/arg-parser';
+import {
+  getCliCommand,
+  getCliInputsForCmd,
+  default as generateCmdHandlerFn,
+} from '@app/cli';
 import {
   parseCmdOptions,
   getOptionsFromParserOutput,
   removeTestOutputFromCommandResponse,
 } from '@app/helpers';
 import {
-  CmdOptions,
   CliInputs,
+  CmdOptions,
   toCmdOptions,
   toPositionalArgs,
   ParsedCmdResponse,
@@ -41,14 +44,17 @@ import {
 function main(argv: string[]) {
   return pipe(
     TE.Do,
-    TE.let('cliInputs', () => getCliInputsArrFromArgv(argv)),
+    TE.let('rawCliInputs', () => getCliInputsArrFromArgv(argv)),
+    TE.let('cliCmd', ({ rawCliInputs }) => getCliCommand(rawCliInputs)),
 
-    TE.let('cliCommandHandlerFn', ({ cliInputs }) =>
-      pipe(getCliCommand(cliInputs), generateCmdHandlerFn)
+    TE.let('cliInputs', ({ rawCliInputs }) => getCliInputsForCmd(rawCliInputs)),
+
+    TE.let('cliCommandHandlerFn', ({ cliCmd }) =>
+      pipe(cliCmd, generateCmdHandlerFn)
     ),
 
     TE.let('globalCliOptionsParserOutput', ({ cliInputs }) =>
-      pipe(cliInputs, getCommandOptions, parseGlobalCliCmdOptions)
+      pipe(cliInputs, toCmdOptions, parseGlobalCliCmdOptions)
     ),
 
     TE.bind(
@@ -62,10 +68,6 @@ function main(argv: string[]) {
 
     TE.fold(T.fromIO, logCliOutput)
   );
-}
-
-function getCommandOptions(cliInputs: CliInputs): CmdOptions {
-  return pipe(cliInputs, A.filter(isOptionLike), toCmdOptions);
 }
 
 function parseGlobalCliCmdOptions(cmdOptions: CmdOptions) {
@@ -114,6 +116,9 @@ function generateCliOutput(cliCommandHandlerFn: CmdFnWithTestOutput<unknown>) {
   ) => {
     const { positionalArgs, options } = globalCliOptionsParserOutput;
 
+    const cmdOptions = pipe(cliInputs, toCmdOptions);
+    const cmdArguments = pipe(positionalArgs, toPositionalArgs);
+
     // prettier-ignore
     const cmdHandlerToRun = match([options.help, options.version] as [boolean, boolean])
       .with(P.union([true, false], [true, true]), () => helpCmd)
@@ -122,10 +127,7 @@ function generateCliOutput(cliCommandHandlerFn: CmdFnWithTestOutput<unknown>) {
       .exhaustive();
 
     return pipe(
-      cmdHandlerToRun(
-        toPositionalArgs(positionalArgs),
-        getCommandOptions(cliInputs)
-      ),
+      cmdHandlerToRun(cmdArguments, cmdOptions),
       TE.map(flow(removeTestOutputFromCommandResponse, parseCmdResponse))
     );
   };

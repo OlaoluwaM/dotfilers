@@ -392,4 +392,4 @@ export function isNotIgnored(fileObj: File): boolean {
   return fileObj.ignore === false;
 }
 
-export const DEFAULT_DEST_RECORD_FILE_CONTENTS = { '!': '*' };
+export const DEFAULT_DEST_RECORD_FILE_CONTENTS = { [EXCLUDE_KEY]: ALL_FILES_CHAR };

@@ -24,6 +24,9 @@ test('Should ensure that CLI argument parser works as intended ', () => {
 
   const sampleArgv = [
     ...expectedPositionalArgs,
+    // This was added to test if the arg-parser is smart enough to NOT consider the values of unknown options as positional args
+    '-i',
+    'jjjj',
     '--many=8',
     '-ab',
     ...expectedUnknownOptions,
@@ -69,7 +72,7 @@ test('Should ensure that CLI argument parser works as intended ', () => {
   // Assert
   expect(options).toMatchObject(pipe(expectedOptions, R.map(O.some)));
   expect(positionalArgs).toIncludeSameMembers(expectedPositionalArgs);
-  expect(unknownOptions).toIncludeSameMembers(expectedUnknownOptions);
+  expect(unknownOptions).toIncludeSameMembers(expectedUnknownOptions.concat(['-i']));
 });
 
 test('Should ensure parser can handle options that are not present in argv but have been specified in config without a default value', () => {

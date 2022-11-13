@@ -65,12 +65,17 @@ export default function generateCmdHandlerFn(
   };
 }
 
-export function getCliCommand(cliInputs: CliInputs) {
+export function getCliCommand(rawCliInputs: CliInputs) {
   return pipe(
-    cliInputs,
+    rawCliInputs,
     A.head,
     O.getOrElseW(() => 'no command')
   ) as CommandsAndAliases;
+}
+
+export function getCliInputsForCmd(rawCliInputs: string[]) {
+  const [_, ...restOfInputs] = rawCliInputs;
+  return restOfInputs as CliInputs;
 }
 
 function handleBadCommand(badCommand: string) {
