@@ -5,6 +5,7 @@ import * as TE from 'fp-ts/lib/TaskEither';
 
 import linkCmd from '@cmds/link';
 import unlinkCmd from '@cmds/unlink';
+import versionCmd from '@cmds/version';
 import createConfigGroupCmd from '@cmds/createConfigGroup';
 
 import { pipe } from 'fp-ts/lib/function';
@@ -15,13 +16,13 @@ import { logErrors, logOutput } from '@utils/index';
 import { default as helpCmd, getHelpString } from '@cmds/help';
 import { CliInputs, CmdOptions, PositionalArgs, CmdFnWithTestOutput } from '@types';
 
-type Commands = 'link' | 'unlink' | 'sync' | 'create';
-type CommandAliases = 'ln' | 'un' | 's' | 'c';
+type Commands = 'link' | 'unlink' | 'sync' | 'create' | '--help' | '--version';
+type CommandAliases = 'ln' | 'un' | 's' | 'c' | '-h' | '-v';
 
 export type CommandsAndAliases = Commands | CommandAliases;
 
 type CommandCenter = {
-  readonly [Key in Commands | 'help']: CmdFnWithTestOutput<unknown>;
+  readonly [Key in Commands]: CmdFnWithTestOutput<unknown>;
 };
 
 function generateCommandCenter(): CommandCenter {
@@ -32,7 +33,8 @@ function generateCommandCenter(): CommandCenter {
     unlink: unlinkCmd,
     create: createConfigGroupCmd,
     sync: syncCmd,
-    help: helpCmd,
+    '--help': helpCmd,
+    '--version': versionCmd,
   };
 }
 
@@ -58,6 +60,14 @@ export default function generateCmdHandlerFn(
       case 'sync':
       case 's':
         return commandCenter.sync(cmdArguments, cmdOptions);
+
+      case '--version':
+      case '-v':
+        return commandCenter['--version'](cmdArguments, cmdOptions);
+
+      case '--help':
+      case '-h':
+        return commandCenter['--help'](cmdArguments, cmdOptions);
 
       default:
         return handleBadCommand(commandToPerform);
