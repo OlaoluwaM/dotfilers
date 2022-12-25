@@ -5,13 +5,11 @@ import { not } from 'fp-ts/lib/Predicate';
 import { pipe } from 'fp-ts/lib/function';
 import { Reader } from 'fp-ts/lib/Reader';
 import { replace } from 'ramda';
+import { NOT_FOUND } from './constants';
 
 interface ShellVariableMap {
   [variableName: string]: string | undefined;
 }
-
-// NOTE: Exposed for testing purposes ONLY!!
-export const NOT_FOUND = '$NOT_FOUND';
 
 export function expandShellVariablesInString(strWithShellVars: string) {
   return replaceShellVarsInString(process.env)(strWithShellVars);

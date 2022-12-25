@@ -167,10 +167,17 @@ function generateCliOutputFn(
     return pipe(
       cliOutput,
       reArrangeCmdResponseTypeOrder,
+
       RC.traverseWithIndex(T.ApplicativeSeq)((outputType, outputVals) =>
         pipe(responseTypeToOutputFn[outputType](outputVals), T.fromIO)
       ),
-      T.chainIOK(() => () => process.exit(determineExitCode(cliOutput)))
+
+      T.chainIOK(() =>
+        flow(
+          () => console.log('\n'),
+          () => process.exit(determineExitCode(cliOutput))
+        )
+      )
     );
   };
 }

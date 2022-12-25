@@ -17,7 +17,7 @@
     "prebuild": "rm -rf dist",
     "build": "tsc -p ./tsconfig.prod.json && tsc-alias -p ./tsconfig.json",
     "postbuild": "./dist-patch.sh && npm run bundle",
-    "bundle": "esbuild ./dist/index.js  --bundle --outfile=./bin/build.cjs --format=cjs --platform=node",
+    "bundle": "esbuild ./dist/index.js  --bundle --outfile=./bin/build.cjs --format=cjs --platform=node --log-level=error",
     "test:setup": "./setup-test-data/setup.sh",
     "test": "npm run test:setup && npm run test:lib && NODE_OPTIONS=--experimental-vm-modules jest",
     "test:ci": "npm run test:setup && npm run test:lib && NODE_OPTIONS=--experimental-vm-modules CI=true jest",
@@ -26,7 +26,7 @@
     "test:single:silent": "npm run test:setup && NODE_OPTIONS=--experimental-vm-modules jest --silent --testPathPattern --",
     "test:coverage": "npm run test -- --coverage",
     "test:lib": "FOR_LIB=true NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern src/lib/**/test.ts",
-    "test:lib:silent": "FOR_LIB=true NODE_OPTIONS=--experimental-vm-modules jest --silent --testPathPattern src/lib/**/test.ts",
+    "test:lib:silent": "FOR_LIB=true NODE_OPTIONS=--experimental-vm-modules jest --silent",
     "test:lib:single": "FOR_LIB=true NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles --testPathPattern --",
     "test:coverage:lib": "FOR_LIB=true npm run test:lib -- --coverage",
     "test:lib:single:silent": "FOR_LIB=true NODE_OPTIONS=--experimental-vm-modules jest --silent --detectOpenHandles --testPathPattern --"

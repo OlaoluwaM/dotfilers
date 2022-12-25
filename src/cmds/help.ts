@@ -1,7 +1,5 @@
 import * as TE from 'fp-ts/lib/TaskEither';
-
 import chalk from 'chalk';
-
 import { CmdFnWithTestOutput, CmdOptions, PositionalArgs } from '@types';
 
 const helpString = `
@@ -34,6 +32,7 @@ ${chalk.yellow.bold('FLAGS:')}
   -q, --quiet                  Suppress stdout output, but not stderr output
   -y, --yes                    Used with both the link and unlink commands to bypass confirmation prompt and attempt to operate on all config groups
   -i, --interactive            Used with both the link and unlink commands to allow users pick, from a list, the config groups they wish to operate on
+  -r, --regular                Used with create command to produce regular folders in your dotfiles directory instead of config groups
 
 ${chalk.yellow.bold('EXAMPLES:')}
   dotfilers link config-group1 config-group2 config-group3

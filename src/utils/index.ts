@@ -304,6 +304,6 @@ export function removeLeadingPathSeparator(
   );
 }
 
-export function indentText(indentSize: number = 17) {
+export function indentText(indentSize: number = 14) {
   return (text: string) => text.trim().padStart(indentSize);
 }
