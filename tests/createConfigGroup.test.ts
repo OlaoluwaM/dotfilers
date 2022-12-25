@@ -10,11 +10,18 @@ import fsExtra from 'fs-extra';
 
 import { rm } from 'fs/promises';
 import { pipe } from 'fp-ts/lib/function';
-import { toPositionalArgs } from '@types';
+import { concatAll } from 'fp-ts/lib/Monoid';
+import { MonoidAny } from 'fp-ts/lib/boolean';
 import { TEST_DATA_DIR_PREFIX } from './setup';
+import { toCmdOptions, toPositionalArgs } from '@types';
 import { default as createConfigGroupCmd } from '@cmds/createConfigGroup';
 import { DEFAULT_DEST_RECORD_FILE_CONTENTS } from '@app/configGroup';
-import { manualFail, generatePath, defaultDestRecordEq } from './helpers';
+import {
+  manualFail,
+  generatePath,
+  doesPathExist,
+  defaultDestRecordEq,
+} from './helpers';
 import {
   ExitCodes,
   CONFIG_GRP_DEST_RECORD_FILE_NAME,
@@ -172,6 +179,73 @@ describe('Tests for the happy path', () => {
 
     // Cleanup
     await removeDirs([nameOfMockNestedConfigGroup]);
+  });
+
+  test('Should ensure that the create command can produce regular directories instead of config groups with the --regular flag', async () => {
+    // Arrange
+    const exampleDirsToCreate = [
+      'top-level-dir-one',
+      'top-level-dir-two',
+      'top-level-dir-two/inner-dir',
+      'top-level-dir-one/inner/inner/inner-dir',
+    ];
+
+    const commandOptions = ['-r', '--regular'][Math.floor(Math.random())];
+
+    // Act
+    const cmdOutputTE = createConfigGroupCmd(
+      toPositionalArgs(exampleDirsToCreate),
+      toCmdOptions([commandOptions])
+    );
+
+    const isCreatedDirAConfigGroup =
+      (createdDirPath: string): T.Task<boolean> =>
+      () =>
+        pipe(
+          path.join(createdDirPath, CONFIG_GRP_DEST_RECORD_FILE_NAME),
+          doesPathExist
+        );
+
+    // Assert
+    await pipe(
+      cmdOutputTE,
+
+      TE.bindW(
+        'areCreatedDirsAreConfigGroups',
+        ({ testOutput: pathsToCreatedDirs }) =>
+          pipe(
+            pathsToCreatedDirs,
+            T.traverseArray(isCreatedDirAConfigGroup),
+            T.map(concatAll(MonoidAny)),
+            TE.rightTask
+          )
+      ),
+
+      TE.fold(
+        () => () =>
+          Promise.reject(
+            manualFail(
+              "Expected a 'CmdResponse' object, but got a CLI exit function"
+            )
+          ),
+
+        ({
+            errors,
+            warnings,
+            areCreatedDirsAreConfigGroups,
+            testOutput: pathsToCreatedDirs,
+          }) =>
+          async () => {
+            expect(errors).toBeEmpty();
+            expect(warnings).toBeEmpty();
+            expect(areCreatedDirsAreConfigGroups).toBeFalse();
+            expect(pathsToCreatedDirs.length).toEqual(exampleDirsToCreate.length);
+          }
+      )
+    )();
+
+    // Cleanup
+    await removeDirs(exampleDirsToCreate);
   });
 });
 

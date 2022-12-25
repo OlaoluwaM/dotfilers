@@ -1,13 +1,12 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { defaults } from 'jest-config';
 import type { JestConfigWithTsJest } from 'ts-jest';
-// import type { Config } from '@jest/types';
 
-const areWeTestingLibs = process.env?.FOR_LIB ?? false;
 const isCI = process.env?.CI ?? false;
+const areWeTestingLibs = process.env?.FOR_LIB ?? false;
 
 let collectCoverageFrom = areWeTestingLibs
-  ? ['src/lib/**']
+  ? ['src/lib/**/test.ts']
   : ['src/*/{*.ts,!(lib)/**/*.ts}'];
 
 let testPathIgnorePatterns = areWeTestingLibs ? ['/tests/'] : ['src/lib/'];

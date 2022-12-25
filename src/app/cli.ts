@@ -8,6 +8,7 @@ import unlinkCmd from '@cmds/unlink';
 import versionCmd from '@cmds/version';
 import createConfigGroupCmd from '@cmds/createConfigGroup';
 
+import { log } from 'fp-ts/lib/Console';
 import { pipe } from 'fp-ts/lib/function';
 import { ExitCodes } from '../constants';
 import { exitCliWithCodeOnly } from './helpers';
@@ -92,6 +93,7 @@ function handleBadCommand(badCommand: string) {
   return pipe(
     logErrors([generateBadCommandErrorMessage(badCommand)]),
     IO.chain(() => logOutput([getHelpString()])),
+    IO.chain(() => log('\n')),
     IO.chain(() => exitCliWithCodeOnly(ExitCodes.COMMAND_NOT_FOUND)),
     TE.left
   );

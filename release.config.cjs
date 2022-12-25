@@ -6,7 +6,8 @@ module.exports = {
       {
         preset: 'conventionalcommits',
         releaseRules: [
-          { type: 'docs', release: 'patch' },
+          { type: 'feat', scope: 'docs', release: 'patch' },
+          { type: 'chore', scope: 'docs', release: 'patch' },
           { type: 'feat', scope: 'release-major', release: 'major' },
           { type: 'feat', scope: 'release-minor', release: 'minor' },
           { type: 'feat', scope: 'release-patch', release: 'patch' },

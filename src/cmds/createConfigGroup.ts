@@ -1,17 +1,21 @@
 import * as A from 'fp-ts/lib/Array';
 import * as E from 'fp-ts/lib/Either';
+import * as O from 'fp-ts/lib/Option';
 import * as S from 'fp-ts/lib/Separated';
 import * as T from 'fp-ts/lib/Task';
+import * as RC from 'fp-ts/lib/Record';
 import * as TE from 'fp-ts/lib/TaskEither';
+import * as RTE from 'fp-ts/lib/ReaderTaskEither';
 
 import path from 'path';
 import chalk from 'chalk';
 
-import { exitCli } from '@app/helpers';
 import { match, P } from 'ts-pattern';
 import { writeFile } from 'fs/promises';
-import { pipe, flow } from 'fp-ts/lib/function';
 import { newAggregateError } from '@utils/AggregateError';
+import { optionConfigConstructor } from '@lib/arg-parser';
+import { exitCli, getParsedOptions } from '@app/helpers';
+import { pipe, flow, constTrue, constant } from 'fp-ts/lib/function';
 import { CONFIG_GRP_DEST_RECORD_FILE_NAME, ExitCodes } from '../constants';
 import { bind, createDirIfItDoesNotExist, doesPathExist } from '@utils/index';
 import {
@@ -25,16 +29,42 @@ import {
   CmdResponseWithTestOutput,
 } from '@types';
 
+interface ParsedCmdOptions {
+  readonly regular: boolean;
+}
+
 export default function main(
   cmdArguments: PositionalArgs,
-  _: CmdOptions
+  cmdOptions: CmdOptions
 ): ReturnType<CmdFnWithTestOutput<string[]>> {
+  const parsedCmdOptions: ParsedCmdOptions = parseCmdOptions(cmdOptions);
+
   return match(cmdArguments)
     .with([], () => TE.left(exitCli(generateCmdFatalErrMsg(), ExitCodes.GENERAL)))
     .with(P.array(P.string), (__, value) =>
-      pipe(createConfigGroupDir(value), TE.rightTask)
+      pipe(createConfigGroupDir(value)(parsedCmdOptions), TE.rightTask)
     )
     .exhaustive();
+}
+
+function parseCmdOptions(cmdOptions: CmdOptions): ParsedCmdOptions {
+  return pipe(
+    cmdOptions,
+    pipe(generateOptionConfig(), getParsedOptions),
+    RC.map(O.getOrElse(() => false))
+  );
+}
+
+function generateOptionConfig() {
+  return {
+    options: {
+      regular: optionConfigConstructor({
+        parser: constTrue,
+        isFlag: true,
+        aliases: ['r'],
+      }),
+    },
+  };
 }
 
 function generateCmdFatalErrMsg() {
@@ -50,29 +80,32 @@ interface ConfigGroupDirCreationResponse {
 }
 
 function createConfigGroupDir(configGroupNames: string[]) {
-  return pipe(
-    T.Do,
+  return ({ regular: shouldCreateRegularDir }: ParsedCmdOptions) =>
+    pipe(
+      T.Do,
 
-    T.let(
-      'configGroupPathGenerationResult',
-      bind(generatePathsToPotentialConfigGroupDirs)(configGroupNames)
-    ),
+      T.let(
+        'configGroupPathGenerationResult',
+        bind(generatePathsToPotentialConfigGroupDirs)(configGroupNames)
+      ),
 
-    T.bind(
-      'configGroupDirCreationResult',
-      ({
-        configGroupPathGenerationResult: {
-          right: allAbsPathsToPotentialConfigGroups,
-        },
-      }) =>
-        pipe(
-          allAbsPathsToPotentialConfigGroups,
-          A.wilt(T.ApplicativePar)(generateConfigGroupDirForNonExistingOnes)
-        )
-    ),
+      T.bind(
+        'configGroupDirCreationResult',
+        ({
+          configGroupPathGenerationResult: {
+            right: allAbsPathsToPotentialConfigGroups,
+          },
+        }) =>
+          pipe(
+            allAbsPathsToPotentialConfigGroups,
+            A.wilt(T.ApplicativePar)(
+              generateConfigGroupDirForNonExistingOnes(shouldCreateRegularDir)
+            )
+          )
+      ),
 
-    T.map(generateCmdResponse)
-  );
+      T.map(generateCmdResponse)
+    );
 }
 
 function generateCmdResponse(
@@ -116,15 +149,30 @@ function generateConfigGroupDirPathCreationError(configGroupName: string) {
     );
 }
 
-function generateConfigGroupDirForNonExistingOnes(absPath: string) {
-  return pipe(
-    doesPathExist(absPath),
-    TE.swap,
-    TE.mapLeft(() => `${absPath} already exists. Skipping...`),
-    TE.chainW(flow(() => absPath, createDirIfItDoesNotExist, TE.fromTask)),
-    TE.chainFirstTaskK(() => createDefaultDestinationRecordFile(absPath)),
-    TE.map(() => `${path.basename(absPath)} config group created (${absPath})`)
-  );
+function generateConfigGroupDirForNonExistingOnes(
+  shouldCreateRegularDir: boolean
+): RTE.ReaderTaskEither<string, string, string> {
+  return (absPath: string) =>
+    pipe(
+      doesPathExist(absPath),
+      TE.swap,
+      TE.mapLeft(() => `${absPath} already exists. Skipping...`),
+      TE.chainW(flow(constant(absPath), createDirIfItDoesNotExist, TE.fromTask)),
+      TE.chainFirstTaskK(
+        flow(
+          constant(absPath),
+          determineDirectoryTypeToCreate(shouldCreateRegularDir)
+        )
+      ),
+      TE.map(() => `"${path.basename(absPath)}" config group created (${absPath})`)
+    );
+}
+
+function determineDirectoryTypeToCreate(shouldCreateRegularDir: boolean) {
+  return (absPath: string) =>
+    shouldCreateRegularDir
+      ? T.of(undefined)
+      : createDefaultDestinationRecordFile(absPath);
 }
 
 function createDefaultDestinationRecordFile(configGroupDirPath: string) {
