@@ -640,6 +640,87 @@ describe('Tests for the happy path', () => {
       expect(allIgnoredFileDestinationPathsAreValid).toBeFalse();
     });
 
+    test('Should ensure that the link command allows for ignoring all files in a nested directory using glob patterns', async () => {
+      // Arrange
+      const mockConfigGroupName = 'withGlobsOnly';
+
+      const mockDestinationsRecord = {
+        [EXCLUDE_KEY]: ['inner/*'],
+        [ALL_FILES_CHAR]: '~/.sample/default',
+      };
+
+      const nestedDirName = 'inner';
+      const generateConfigGroupEntityPath = generatePath(mockConfigGroupName);
+
+      const mockConfigGroupSetupTask = pipe(
+        generateConfigGroupStructurePath(
+          generateConfigGroupEntityPath(nestedDirName)
+        ),
+        createDirIfItDoesNotExist
+      );
+
+      const nestedConfigGroupFiles = pipe(
+        ['cat.rs', 'index.py', 'example.json'],
+        A.map(filename => path.join(nestedDirName, filename))
+      );
+
+      const mockConfigGroupFiles = [
+        'example.js',
+        'special.ts',
+        'gater.js',
+        'sample.ts',
+      ];
+
+      const allMockConfigGroupFiles = A.concat(mockConfigGroupFiles)(
+        nestedConfigGroupFiles
+      );
+
+      const allIgnoredFiles = pipe(
+        allMockConfigGroupFiles,
+        A.map(path.basename),
+        filenames => micromatch(filenames, mockDestinationsRecord[EXCLUDE_KEY])
+      );
+
+      const mockConfigGroupFilesCreationTask = pipe(
+        allMockConfigGroupFiles,
+        T.traverseArray(
+          compose(createConfigGroupFile, generateConfigGroupEntityPath)
+        )
+      );
+
+      const mockConfigGroupDestinationRecordCreationTask = createConfigGroupFile(
+        generateConfigGroupEntityPath(CONFIG_GRP_DEST_RECORD_FILE_NAME),
+        JSON.stringify(mockDestinationsRecord)
+      );
+
+      await mockConfigGroupSetupTask();
+      await mockConfigGroupFilesCreationTask();
+      await mockConfigGroupDestinationRecordCreationTask();
+
+      // Act
+      const cmdOutput = await linkCmd(toPositionalArgs([mockConfigGroupName]), [])();
+      const { errors, testOutput: configGroups } = cmdOutput as CmdDataOutput;
+
+      const ignoredFileNames = pipe(
+        getIgnoredFilesFromConfigGroups(configGroups),
+        A.map(fileBasenameLens.get)
+      );
+
+      const ignoredFileNameDestinationPaths = pipe(
+        getIgnoredFilesFromConfigGroups(configGroups),
+        A.map(destinationPathLens.get)
+      );
+
+      const allIgnoredFileDestinationPathsAreValid = await checkIfAllPathsAreValid(
+        ignoredFileNameDestinationPaths
+      )();
+
+      // Assert
+      expect(errors).toBeEmpty();
+      expect(ignoredFileNames).toIncludeAllMembers(allIgnoredFiles);
+      expect(allIgnoredFileDestinationPathsAreValid).toBeFalse();
+    });
+
     test('Should ensure that the link command matches globs with nested files as well', async () => {
       // Arrange
       const mockConfigGroupName = 'nestedWithGlob';

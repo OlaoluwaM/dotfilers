@@ -41,7 +41,7 @@ The CLI requires that you encapsulate configuration files into special directori
 
 Although, it sounds very simple (because it is), this file is has added capabilities such as:
 
-- The ability to configure a destination for all configuration files at once using the `all` key which also doubles as a value if you wanted to set all configuration files to be ignored with `ignore` key.
+- The ability to configure a destination for all configuration files at once using the `all` key which also doubles as a value if you wanted to set all configuration files to be excluded with `exclude` key.
 - We can direct sets of configuration files to a single destination path using globs as keys in the file
 - Paths support all available shell variables, even the `~`. Destination paths must be absolute, not relative
 
@@ -101,7 +101,7 @@ npm i -g dotfilers
 
 The CLI has four commands
 
-- `link`: Receives the names of configuration groups as arguments and, by default, creates symbolic links of the **un-ignored** files within each listed configuration group. The destination path of the ensuing symbolic links are determined by associations listed in the `destinations.json` file of the corresponding configuration group. If the destination path does not exist, it is created, regardless of how nested it is.
+- `link`: Receives the names of configuration groups as arguments and, by default, creates symbolic links of the **un-excluded** files within each listed configuration group. The destination path of the ensuing symbolic links are determined by associations listed in the `destinations.json` file of the corresponding configuration group. If the destination path does not exist, it is created, regardless of how nested it is.
 
 - `unlink`: The opposite to `link`. Functions in much of the same way, except rather than placing symbolic links at a destination path, it deletes the symbolic links of the files in the configuration groups, using the corresponding `destinations.json` as lookup reference for where the links are
 
@@ -134,11 +134,11 @@ When we invoke the `link` command (`link shell`), we would be creating symbolic 
 
 The `all` key is a reserved one that collectively refers to _all_ files within a config group. It can also be used to specify a general default destination for files not explicitly associated with a destination path in the JSON. **Implicitly, though, all files default to having their symbolic links placed in the home directory**
 
-To keep certain files from having symbolic links created and positioned somewhere in your file system, we can list them as part of the values for the `ignore` key, as so:
+To keep certain files from having symbolic links created and positioned somewhere in your file system, we can list them as part of the values for the `exclude` key, as so:
 
 ```json
 {
-  "ignore": ["example.json", "*.toml", ".xresources"]
+  "exclude": ["example.json", "*.toml", ".xresources"]
 }
 ```
 
@@ -146,7 +146,7 @@ This is another reserved key that takes either an array of filenames and globs o
 
 ```json
 {
-  "ignore": "all"
+  "exclude": "all"
 }
 ```
 
@@ -159,7 +159,7 @@ Finally, here is a full on sample `destinations.json` file
   "config-file-name.json":"$HOME/.local/app",
   "inner/nested-file.rs": "$HOME",
   "*.toml": "$CUSTOM_VAR/.local/toml-configs",
-  "ignore": ["*.js", "*.txt", ".gitconfig"],
+  "exclude": ["*.js", "*.txt", ".gitconfig"],
   "all": "~/default"
 }
 ```
