@@ -112,12 +112,8 @@ export type DestinationPath = Brand<string, 'Destination Path'>;
 export type CmdOptions = Brand<string[], 'Command Options'> | [];
 export type PositionalArgs = Brand<string[], 'Positional Args'> | [];
 
-export type CliInputs = Brand<string[], 'Parsed Argv'>;
-
 export const toSourcePath = createBrander<SourcePath>();
 export const toDestinationPath = createBrander<DestinationPath>();
 
 export const toCmdOptions = createBrander<ExcludeNonBrands<CmdOptions>>();
 export const toPositionalArgs = createBrander<ExcludeNonBrands<PositionalArgs>>();
-
-export const toCliInputs = createBrander<CliInputs>();
