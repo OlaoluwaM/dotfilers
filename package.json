@@ -97,6 +97,7 @@
     "ramda": "^0.28.0",
     "readdirp": "^3.6.0",
     "simple-git": "^3.14.1",
-    "ts-pattern": "^4.0.5"
+    "ts-pattern": "^4.0.5",
+    "type-fest": "^3.5.0"
   }
 }
