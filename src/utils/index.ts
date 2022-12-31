@@ -15,7 +15,7 @@ import { exec } from 'child_process';
 import { getEnv } from '@lib/shellVarStrExpander';
 import { match, P } from 'ts-pattern';
 import { promisify } from 'util';
-import { isEmpty, slice, transpose } from 'ramda';
+import { isEmpty, transpose } from 'ramda';
 import { copyFile, link, symlink, unlink } from 'fs/promises';
 import { SHELL_EXEC_MOCK_VAR_NAME, SHELL_EXEC_MOCK_ERROR_HOOK } from '../constants';
 import {
@@ -24,10 +24,8 @@ import {
   getErrorMessagesFromAggregateErr,
 } from './AggregateError';
 import {
-  CliInputs,
   SourcePath,
   AnyFunction,
-  toCliInputs,
   CmdResponse,
   DestinationPath,
   ParsedCmdResponse,
@@ -215,11 +213,6 @@ export function bind<Fn extends AnyFunction>(fn: Fn) {
   return (...argsToBind: Parameters<Fn>) =>
     () =>
       fn(...argsToBind) as ReturnType<Fn>;
-}
-
-export function getCliInputsArrFromArgv(argv: string[]): CliInputs {
-  const INDEX_OF_CLI_ARGS = 2;
-  return pipe(argv, slice(INDEX_OF_CLI_ARGS, Infinity)<string>, toCliInputs);
 }
 
 export function emptyLog(_?: unknown): IO.IO<void> {

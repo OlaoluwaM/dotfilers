@@ -7,7 +7,9 @@ Olaoluwa Mustapha <olaolum@pm.me>
 Dotfilers is a CLI tool that keeps system configuration (dotfiles) management sane and simple
 
 ${chalk.yellow.bold('USAGE:')}
-  dotfilers (COMMAND|ALIASES) <config-groups...> [OPTIONS...]
+  dotfilers [FLAGS|OPTIONS] (COMMAND|ALIASES) <config-groups...>
+  OR
+  dfs [FLAGS|OPTIONS] (COMMAND|ALIASES) <config-groups...>
 
 ${chalk.yellow.bold('COMMANDS:')}
   link                         Symlinks the non-ignored dotfiles within the passed config groups to their specified destination

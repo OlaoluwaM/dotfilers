@@ -238,7 +238,7 @@ export function getPathToDotfilesDirPathRetrievalError() {
 }
 
 export function parseCmdOptions<PC extends ParserConfig>(parserConfig: PC) {
-  return (cmdOptions: CmdOptions) => pipe(cmdOptions, parseArgv(parserConfig));
+  return (cmdOptions: string[]) => pipe(cmdOptions, parseArgv(parserConfig));
 }
 
 export function getOptionsFromParserOutput<PO extends AnyParserOutput>(
